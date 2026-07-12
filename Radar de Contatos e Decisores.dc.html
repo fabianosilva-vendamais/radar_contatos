@@ -738,6 +738,7 @@ class Component extends DCLogic {
     this.setState({ runningJobId: jobId });
     await this.reloadJobData(jobId);
     const maxAtt = Number(this.state.settings.maxAttempts) || 3;
+    let fatalStreak = 0; // erros seguidos de cota/chave → pausa automática
 
     while (true) {
       if (this._pause) { await this.setJobStatus(jobId, 'pausado'); break; }
@@ -770,10 +771,21 @@ class Component extends DCLogic {
         });
         next.status_processamento = analysis.precisa_revisao_humana ? 'revisao_humana' : 'processado';
         next.last_error = '';
+        fatalStreak = 0;
       } catch (e) {
         next.attempts = (next.attempts || 0) + 1;
         next.last_error = String((e && e.message) || e);
         next.status_processamento = 'erro';
+        // erro de cota, créditos ou chave inválida afeta TODAS as linhas: não adianta continuar
+        if (/quota|billing|credit|invalid x-api-key|incorrect api key|401|excedido/i.test(next.last_error)) fatalStreak++;
+        else fatalStreak = 0;
+        if (fatalStreak >= 3) {
+          next.updated_at = Date.now();
+          await this.E.put('contacts', next);
+          await this.setJobStatus(jobId, 'pausado');
+          this.toast('Análise pausada automaticamente: erro de chave ou créditos da API. Resolva no painel do provedor e clique em Continuar.');
+          break;
+        }
       }
       next.updated_at = Date.now();
       await this.E.put('contacts', next);
