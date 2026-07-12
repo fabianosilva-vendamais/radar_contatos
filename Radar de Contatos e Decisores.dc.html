@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    html,body{margin:0;padding:0;background:#F2F1EC;color:#1B1E22;font-family:'IBM Plex Sans',system-ui,sans-serif;}
+    *{box-sizing:border-box;}
+    a{color:#0E5E54;text-decoration:none;} a:hover{color:#0A463F;text-decoration:underline;}
+    input,select,button{font-family:inherit;font-size:14px;}
+    button{cursor:pointer;}
+    input:focus,select:focus{outline:2px solid #0E5E54;outline-offset:1px;}
+    ::selection{background:#0E5E54;color:#fff;}
+    @keyframes radarPulse{0%{transform:scale(.5);opacity:.8}100%{transform:scale(1.9);opacity:0}}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;flex-direction:column;">
+
+  <header style="background:#FFFFFF;border-bottom:1px solid #E4E2DB;padding:0 28px;height:62px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:30;">
+    <div style="display:flex;align-items:center;gap:12px;cursor:pointer;" onClick="{{onGoHome}}">
+      <div style="width:32px;height:32px;border-radius:50%;background:#0E5E54;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#9FDECF;"></div>
+        <sc-if value="{{isProcessing}}" hint-placeholder-val="{{false}}">
+          <div style="position:absolute;inset:0;border-radius:50%;border:2px solid #0E5E54;animation:radarPulse 1.5s ease-out infinite;"></div>
+        </sc-if>
+      </div>
+      <div style="font-weight:700;font-size:15px;letter-spacing:-0.01em;">Radar de Contatos e Decisores</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="font-size:12px;color:#6E7076;background:#F2F1EC;border:1px solid #E4E2DB;border-radius:999px;padding:4px 12px;font-family:'IBM Plex Mono',monospace;">busca: {{providerLabel}}</div>
+      <button onClick="{{onOpenSettings}}" style="background:#FFFFFF;border:1px solid #D6D4CC;border-radius:8px;padding:8px 16px;font-weight:600;color:#1B1E22;" style-hover="background:#F2F1EC;">Configurações</button>
+    </div>
+  </header>
+
+  <main style="flex:1;width:100%;max-width:1180px;margin:0 auto;padding:32px 28px 64px;">
+
+    <!-- ===================== TELA INICIAL ===================== -->
+    <sc-if value="{{isHome}}" hint-placeholder-val="{{true}}">
+      <div style="padding:28px 0 8px;">
+        <h1 style="margin:0;font-size:30px;font-weight:700;letter-spacing:-0.02em;">Radar de Contatos e Decisores</h1>
+        <p style="margin:8px 0 0;font-size:15px;color:#6E7076;max-width:640px;line-height:1.5;">Validação inteligente de contatos comerciais, cargos e decisores a partir de fontes públicas.</p>
+        <div style="margin-top:20px;display:flex;gap:10px;align-items:center;">
+          <button onClick="{{onNewAnalysis}}" style="background:#0E5E54;color:#fff;border:none;border-radius:8px;padding:12px 22px;font-weight:600;font-size:15px;" style-hover="background:#0A463F;">+ Nova análise</button>
+        </div>
+      </div>
+
+      <div style="margin-top:32px;">
+        <div style="font-size:13px;font-weight:600;color:#6E7076;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px;">Análises</div>
+        <sc-if value="{{hasJobs}}" hint-placeholder-val="{{false}}">
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <sc-for list="{{jobs}}" as="j" hint-placeholder-count="2">
+              <div onClick="{{j.onOpen}}" style="background:#FFFFFF;border:1px solid #E4E2DB;border-radius:12px;padding:16px 20px;display:grid;grid-template-columns:1fr 170px 190px auto;gap:16px;align-items:center;cursor:pointer;" style-hover="border-color:#0E5E54;box-shadow:0 2px 8px rgba(14,94,84,0.08);">
+                <div style="min-width:0;">
+                  <div style="font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{j.name}}</div>
+                  <div style="font-size:12.5px;color:#6E7076;margin-top:3px;font-family:'IBM Plex Mono',monospace;">{{j.createdAt}} · modo {{j.modeLabel}}</div>
+                </div>
+                <div>
+                  <span style="display:inline-block;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:{{j.statusBg}};color:{{j.statusColor}};">{{j.statusLabel}}</span>
+                  <sc-if value="{{j.wasInterrupted}}" hint-placeholder-val="{{false}}">
+                    <div style="font-size:11.5px;color:#9A6A00;margin-top:4px;">interrompida — pode retomar</div>
+                  </sc-if>
+                </div>
+                <div>
+                  <div style="height:6px;background:#EEEDE8;border-radius:99px;overflow:hidden;"><div style="height:100%;background:#0E5E54;border-radius:99px;width:{{j.progressPct}}%;"></div></div>
+                  <div style="font-size:12px;color:#6E7076;margin-top:5px;font-family:'IBM Plex Mono',monospace;">{{j.progressText}}</div>
+                </div>
+                <div style="display:flex;gap:8px;">
+                  <sc-if value="{{j.canContinue}}" hint-placeholder-val="{{false}}">
+                    <button onClick="{{j.onContinue}}" style="background:#E3EEEB;border:1px solid #BDD9D2;color:#0E5E54;border-radius:8px;padding:7px 14px;font-weight:600;font-size:13px;" style-hover="background:#D2E5E0;">Continuar</button>
+                  </sc-if>
+                  <sc-if value="{{j.hasProgress}}" hint-placeholder-val="{{false}}">
+                    <button onClick="{{j.onExportRow}}" style="background:#fff;border:1px solid #D6D4CC;color:#3D4045;border-radius:8px;padding:7px 14px;font-weight:600;font-size:13px;" style-hover="background:#F2F1EC;">Exportar</button>
+                  </sc-if>
+                  <button onClick="{{j.onDelete}}" style="background:transparent;border:1px solid #E4E2DB;color:#6E7076;border-radius:8px;padding:7px 12px;font-size:13px;" style-hover="border-color:#B4452B;color:#B4452B;">Excluir</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{noJobs}}" hint-placeholder-val="{{true}}">
+          <div style="background:#FFFFFF;border:1px dashed #D6D4CC;border-radius:12px;padding:40px;text-align:center;color:#6E7076;font-size:14px;">
+            Nenhuma análise ainda. Clique em <strong>Nova análise</strong> para enviar sua primeira planilha de contatos.
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- ===================== NOVA ANÁLISE (WIZARD) ===================== -->
+    <sc-if value="{{isNew}}" hint-placeholder-val="{{false}}">
+      <div style="max-width:900px;margin:0 auto;">
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#6E7076;margin-bottom:18px;font-family:'IBM Plex Mono',monospace;">
+          <span style="color:{{stepColor1}};font-weight:600;">1 Upload</span><span>→</span>
+          <span style="color:{{stepColor2}};font-weight:600;">2 Colunas</span><span>→</span>
+          <span style="color:{{stepColor3}};font-weight:600;">3 Modo</span>
+        </div>
+
+        <sc-if value="{{isStep1}}" hint-placeholder-val="{{true}}">
+          <div style="background:#FFFFFF;border:1px solid #E4E2DB;border-radius:14px;padding:36px;">
+            <h2 style="margin:0 0 6px;font-size:21px;font-weight:700;">Enviar planilha de contatos</h2>
+            <p style="margin:0 0 24px;color:#6E7076;font-size:14px;line-height:1.5;">Excel (.xlsx, .xls) ou CSV. A primeira linha deve conter os nomes das colunas — por exemplo: nome, empresa, cargo, telefone, e-mail, LinkedIn.</p>
+            <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border:2px dashed #C9C7BE;border-radius:12px;padding:48px 20px;cursor:pointer;background:#FAFAF7;" style-hover="border-color:#0E5E54;background:#F4F8F7;">
+              <div style="font-size:15px;font-weight:600;color:#0E5E54;">Selecionar arquivo</div>
+              <div style="font-size:13px;color:#6E7076;">.xlsx · .xls · .csv</div>
+              <input type="file" accept=".xlsx,.xls,.csv,.txt" onChange="{{onFileChange}}" style="display:none;">
+            </label>
+            <sc-if value="{{hasFileError}}" hint-placeholder-val="{{false}}">
+              <div style="margin-top:14px;background:#FBEAE2;border:1px solid #E8C3B2;color:#9A3218;border-radius:8px;padding:10px 14px;font-size:13.5px;">{{fileError}}</div>
+            </sc-if>
+            <div style="margin-top:18px;"><button onClick="{{onGoHome}}" style="background:none;border:none;color:#6E7076;font-size:13.5px;padding:0;text-decoration:underline;">Cancelar e voltar</button></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isStep2}}" hint-placeholder-val="{{false}}">
+          <div style="background:#FFFFFF;border:1px solid #E4E2DB;border-radius:14px;padding:32px;">
+            <h2 style="margin:0 0 4px;font-size:21px;font-weight:700;">Mapear colunas</h2>
+            <p style="margin:0 0 20px;color:#6E7076;font-size:14px;"><strong>{{fileName}}</strong> — {{rowCountLabel}} de dados, {{colCountLabel}}. Confira o mapeamento sugerido abaixo.</p>
+
+            <div style="display:grid;grid-template-columns:repeat(2, 1fr);gap:12px 20px;margin-bottom:24px;">
+              <sc-for list="{{mapFields}}" as="f" hint-placeholder-count="7">
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <label style="font-size:13px;font-weight:600;color:#3D4045;">{{f.label}} {{f.reqMark}}</label>
+                  <select value="{{f.value}}" data-key="{{f.key}}" onChange="{{onMapChange}}" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 10px;background:#fff;color:#1B1E22;">
+                    <sc-for list="{{mapOptions}}" as="opt" hint-placeholder-count="3">
+                      <option value="{{opt.v}}">{{opt.l}}</option>
+                    </sc-for>
+                  </select>
+                </div>
+              </sc-for>
+            </div>
+
+            <sc-if value="{{hasMapError}}" hint-placeholder-val="{{false}}">
+              <div style="margin-bottom:16px;background:#FBEAE2;border:1px solid #E8C3B2;color:#9A3218;border-radius:8px;padding:10px 14px;font-size:13.5px;">{{mapError}}</div>
+            </sc-if>
+
+            <div style="font-size:13px;font-weight:600;color:#6E7076;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Prévia das primeiras linhas</div>
+            <div style="overflow-x:auto;border:1px solid #E4E2DB;border-radius:10px;">
+              <table style="border-collapse:collapse;width:100%;font-size:12.5px;">
+                <thead>
+                  <tr>
+                    <sc-for list="{{previewCols}}" as="col" hint-placeholder-count="5">
+                      <th style="text-align:left;padding:8px 12px;background:#F7F6F2;border-bottom:1px solid #E4E2DB;font-weight:600;white-space:nowrap;color:#3D4045;">{{col}}</th>
+                    </sc-for>
+                  </tr>
+                </thead>
+                <tbody>
+                  <sc-for list="{{previewRows}}" as="row" hint-placeholder-count="4">
+                    <tr>
+                      <sc-for list="{{row.cells}}" as="cell" hint-placeholder-count="5">
+                        <td style="padding:7px 12px;border-bottom:1px solid #F0EFE9;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;color:#3D4045;">{{cell}}</td>
+                      </sc-for>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;margin-top:24px;">
+              <button onClick="{{onBackToUpload}}" style="background:#fff;border:1px solid #D6D4CC;border-radius:8px;padding:10px 18px;font-weight:600;color:#3D4045;" style-hover="background:#F2F1EC;">Voltar</button>
+              <button onClick="{{onToConfig}}" style="background:#0E5E54;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:600;" style-hover="background:#0A463F;">Avançar</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isStep3}}" hint-placeholder-val="{{false}}">
+          <div style="background:#FFFFFF;border:1px solid #E4E2DB;border-radius:14px;padding:32px;">
+            <h2 style="margin:0 0 4px;font-size:21px;font-weight:700;">Modo de análise</h2>
+            <p style="margin:0 0 20px;color:#6E7076;font-size:14px;">{{fileName}} — {{rowCountLabel}} serão analisadas.</p>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+              <sc-for list="{{modeCards}}" as="m" hint-placeholder-count="3">
+                <div onClick="{{m.onSelect}}" data-key="{{m.key}}" style="border:2px solid {{m.border}};background:{{m.bg}};border-radius:12px;padding:18px;cursor:pointer;" style-hover="border-color:#0E5E54;">
+                  <div style="font-weight:700;font-size:15px;margin-bottom:6px;color:#1B1E22;">{{m.label}}</div>
+                  <div style="font-size:13px;color:#6E7076;line-height:1.5;">{{m.desc}}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin-top:18px;background:#F7F6F2;border:1px solid #E4E2DB;border-radius:10px;padding:12px 16px;font-size:13px;color:#6E7076;line-height:1.5;">
+              O processamento é feito contato a contato, com progresso salvo após cada um. Você pode pausar, continuar e exportar resultados parciais a qualquer momento. Provedor de busca atual: <strong>{{providerLabel}}</strong> (altere em Configurações).
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:24px;">
+              <button onClick="{{onBackToMapping}}" style="background:#fff;border:1px solid #D6D4CC;border-radius:8px;padding:10px 18px;font-weight:600;color:#3D4045;" style-hover="background:#F2F1EC;">Voltar</button>
+              <button onClick="{{onCreateJob}}" style="background:#0E5E54;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:600;" style-hover="background:#0A463F;">{{createLabel}}</button>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- ===================== TELA DO JOB (progresso + resultados) ===================== -->
+    <sc-if value="{{isJob}}" hint-placeholder-val="{{false}}">
+      <div>
+        <button onClick="{{onGoHome}}" style="background:none;border:none;color:#6E7076;font-size:13px;padding:0;margin-bottom:14px;text-decoration:underline;">← Todas as análises</button>
+
+        <div style="background:#FFFFFF;border:1px solid #E4E2DB;border-radius:14px;padding:24px 26px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;">
+            <div style="min-width:0;">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <h2 style="margin:0;font-size:20px;font-weight:700;overflow:hidden;text-overflow:ellipsis;">{{jobName}}</h2>
+                <span style="font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:{{jobStatusBg}};color:{{jobStatusColor}};">{{jobStatusLabel}}</span>
+              </div>
+              <div style="font-size:12.5px;color:#6E7076;margin-top:5px;font-family:'IBM Plex Mono',monospace;">modo {{jobModeLabel}} · criada em {{jobCreatedAt}}</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <sc-if value="{{canResume}}" hint-placeholder-val="{{false}}">
+                <button onClick="{{onResume}}" style="background:#0E5E54;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:600;" style-hover="background:#0A463F;">▶ Continuar</button>
+              </sc-if>
+              <sc-if value="{{canPause}}" hint-placeholder-val="{{false}}">
+                <button onClick="{{onPause}}" style="background:#fff;border:1px solid #D6D4CC;border-radius:8px;padding:9px 18px;font-weight:600;color:#3D4045;" style-hover="background:#F2F1EC;">⏸ Pausar</button>
+              </sc-if>
+              <sc-if value="{{canCancel}}" hint-placeholder-val="{{false}}">
+                <button onClick="{{onCancel}}" style="background:#fff;border:1px solid #E4E2DB;border-radius:8px;padding:9px 14px;color:#6E7076;font-size:13.5px;" style-hover="border-color:#B4452B;color:#B4452B;">Cancelar</button>
+              </sc-if>
+              <button onClick="{{onExport}}" style="background:#1B1E22;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:600;" style-hover="background:#000;">⬇ Exportar Excel</button>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;">
+            <div style="height:10px;background:#EEEDE8;border-radius:99px;overflow:hidden;"><div style="height:100%;background:#0E5E54;border-radius:99px;width:{{jobPct}}%;transition:width .4s;"></div></div>
+            <sc-if value="{{isJobRunning}}" hint-placeholder-val="{{false}}">
+              <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:#0E5E54;font-weight:600;">
+                <div style="width:14px;height:14px;border:2px solid #0E5E54;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;"></div>
+                Processando: {{currentContactName}}
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:18px;">
+            <div style="background:#F7F6F2;border-radius:10px;padding:12px 14px;"><div style="font-size:22px;font-weight:700;font-family:'IBM Plex Mono',monospace;">{{cTotal}}</div><div style="font-size:12px;color:#6E7076;margin-top:2px;">Total</div></div>
+            <div style="background:#E1F0E7;border-radius:10px;padding:12px 14px;"><div style="font-size:22px;font-weight:700;color:#1F7A4D;font-family:'IBM Plex Mono',monospace;">{{cProc}}</div><div style="font-size:12px;color:#1F7A4D;margin-top:2px;">Processados</div></div>
+            <div style="background:#F7F6F2;border-radius:10px;padding:12px 14px;"><div style="font-size:22px;font-weight:700;color:#6E7076;font-family:'IBM Plex Mono',monospace;">{{cPend}}</div><div style="font-size:12px;color:#6E7076;margin-top:2px;">Pendentes</div></div>
+            <div style="background:#FBEAE2;border-radius:10px;padding:12px 14px;"><div style="font-size:22px;font-weight:700;color:#B4452B;font-family:'IBM Plex Mono',monospace;">{{cErr}}</div><div style="font-size:12px;color:#B4452B;margin-top:2px;">Erros</div></div>
+            <div style="background:#EEEDE8;border-radius:10px;padding:12px 14px;"><div style="font-size:22px;font-weight:700;color:#6E7076;font-family:'IBM Plex Mono',monospace;">{{cInc}}</div><div style="font-size:12px;color:#6E7076;margin-top:2px;">Inconclusivos</div></div>
+            <div style="background:#FDF3E0;border-radius:10px;padding:12px 14px;"><div style="font-size:22px;font-weight:700;color:#9A6A00;font-family:'IBM Plex Mono',monospace;">{{cRev}}</div><div style="font-size:12px;color:#9A6A00;margin-top:2px;">Revisão humana</div></div>
+          </div>
+
+          <div style="display:flex;gap:10px;margin-top:14px;">
+            <sc-if value="{{hasErrors}}" hint-placeholder-val="{{false}}">
+              <button onClick="{{onReprocessErrors}}" style="background:#fff;border:1px solid #E8C3B2;color:#B4452B;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;" style-hover="background:#FBEAE2;">↻ Reprocessar erros</button>
+            </sc-if>
+            <sc-if value="{{hasInconclusive}}" hint-placeholder-val="{{false}}">
+              <button onClick="{{onReprocessInconclusive}}" style="background:#fff;border:1px solid #D6D4CC;color:#3D4045;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;" style-hover="background:#F2F1EC;">↻ Reprocessar inconclusivos</button>
+            </sc-if>
+          </div>
+        </div>
+
+        <!-- filtros -->
+        <div style="display:flex;gap:10px;align-items:center;margin:22px 0 12px;flex-wrap:wrap;">
+          <input value="{{fQ}}" onChange="{{onFQ}}" placeholder="Buscar nome, empresa ou cargo…" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 12px;width:260px;background:#fff;">
+          <select value="{{fStatus}}" onChange="{{onFStatus}}" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 10px;background:#fff;">
+            <sc-for list="{{statusFilterOptions}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for>
+          </select>
+          <select value="{{fMin}}" onChange="{{onFMin}}" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 10px;background:#fff;">
+            <sc-for list="{{scoreFilterOptions}}" as="o" hint-placeholder-count="3"><option value="{{o.v}}">{{o.l}}</option></sc-for>
+          </select>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#3D4045;cursor:pointer;"><input type="checkbox" checked="{{fRev}}" onChange="{{onFRev}}">Revisão humana</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#3D4045;cursor:pointer;"><input type="checkbox" checked="{{fSub}}" onChange="{{onFSub}}">Com substituto</label>
+          <div style="margin-left:auto;font-size:12.5px;color:#6E7076;font-family:'IBM Plex Mono',monospace;">{{resultCountLabel}}</div>
+        </div>
+
+        <!-- tabela de resultados -->
+        <div style="background:#FFFFFF;border:1px solid #E4E2DB;border-radius:12px;overflow:hidden;">
+          <div style="display:grid;grid-template-columns:48px 1.5fr 1.2fr 1.1fr 175px 62px 1.1fr 150px;gap:10px;padding:10px 16px;background:#F7F6F2;border-bottom:1px solid #E4E2DB;font-size:11.5px;font-weight:600;color:#6E7076;text-transform:uppercase;letter-spacing:0.05em;">
+            <div>#</div><div>Nome</div><div>Empresa</div><div>Cargo original</div><div>Status</div><div>Score</div><div>Cargo atual provável</div><div>Ação recomendada</div>
+          </div>
+          <sc-for list="{{resultRows}}" as="r" hint-placeholder-count="6">
+            <div onClick="{{r.onOpen}}" style="display:grid;grid-template-columns:48px 1.5fr 1.2fr 1.1fr 175px 62px 1.1fr 150px;gap:10px;padding:11px 16px;border-bottom:1px solid #F0EFE9;font-size:13.5px;align-items:center;cursor:pointer;" style-hover="background:#F7FAF9;">
+              <div style="color:#6E7076;font-family:'IBM Plex Mono',monospace;font-size:12px;">{{r.n}}</div>
+              <div style="min-width:0;">
+                <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{r.nome}}</div>
+                <div style="display:flex;gap:6px;margin-top:2px;">
+                  <sc-if value="{{r.needsRev}}" hint-placeholder-val="{{false}}"><span style="font-size:10.5px;color:#9A6A00;background:#FDF3E0;border-radius:4px;padding:1px 6px;font-weight:600;">revisão</span></sc-if>
+                  <sc-if value="{{r.hasSub}}" hint-placeholder-val="{{false}}"><span style="font-size:10.5px;color:#2456A6;background:#E4EBF7;border-radius:4px;padding:1px 6px;font-weight:600;">substituto</span></sc-if>
+                </div>
+              </div>
+              <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#3D4045;">{{r.empresa}}</div>
+              <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#3D4045;">{{r.cargoOrig}}</div>
+              <div><span style="display:inline-block;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:999px;background:{{r.badgeBg}};color:{{r.badgeColor}};">{{r.badgeLabel}}</span></div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-weight:600;color:{{r.scoreColor}};">{{r.score}}</div>
+              <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#3D4045;">{{r.cargoAtual}}</div>
+              <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:#6E7076;">{{r.acao}}</div>
+            </div>
+          </sc-for>
+          <sc-if value="{{noResults}}" hint-placeholder-val="{{false}}">
+            <div style="padding:36px;text-align:center;color:#6E7076;font-size:14px;">Nenhum contato corresponde aos filtros.</div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+  </main>
+
+  <sc-if value="{{mostrarCompliance}}" hint-placeholder-val="{{true}}">
+    <footer style="border-top:1px solid #E4E2DB;padding:14px 28px;font-size:12px;color:#8A8C90;text-align:center;line-height:1.5;">
+      Usa apenas fontes públicas e permitidas (buscadores, sites institucionais, notícias). Não faz scraping do LinkedIn nem usa login automatizado. Dados originais são preservados e as fontes de cada conclusão ficam registradas.
+    </footer>
+  </sc-if>
+
+  <!-- ===================== DETALHE DO CONTATO ===================== -->
+  <sc-if value="{{hasDetail}}" hint-placeholder-val="{{false}}">
+    <div style="position:fixed;inset:0;background:rgba(27,30,34,0.35);z-index:40;" onClick="{{onCloseDetail}}"></div>
+    <div style="position:fixed;top:0;right:0;bottom:0;width:min(560px, 94vw);background:#FFFFFF;z-index:41;box-shadow:-8px 0 32px rgba(0,0,0,0.15);overflow-y:auto;">
+      <div style="position:sticky;top:0;background:#fff;border-bottom:1px solid #E4E2DB;padding:18px 24px;display:flex;justify-content:space-between;align-items:center;z-index:2;">
+        <div>
+          <div style="font-weight:700;font-size:17px;">{{det.nome}}</div>
+          <div style="font-size:12.5px;color:#6E7076;margin-top:2px;">linha {{det.n}} · {{det.procLabel}}</div>
+        </div>
+        <button onClick="{{onCloseDetail}}" style="background:#F2F1EC;border:none;border-radius:8px;width:32px;height:32px;font-size:15px;color:#3D4045;" style-hover="background:#E4E2DB;">✕</button>
+      </div>
+
+      <div style="padding:20px 24px;display:flex;flex-direction:column;gap:20px;">
+
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#6E7076;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Dados originais (CRM)</div>
+          <div style="background:#F7F6F2;border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:13.5px;">
+            <div><span style="color:#6E7076;">Empresa:</span> <strong>{{det.empresa}}</strong></div>
+            <div><span style="color:#6E7076;">Cargo:</span> <strong>{{det.cargo}}</strong></div>
+            <div><span style="color:#6E7076;">E-mail:</span> {{det.email}}</div>
+            <div><span style="color:#6E7076;">Telefone:</span> {{det.telefone}}</div>
+            <div style="grid-column:1/-1;"><span style="color:#6E7076;">LinkedIn (referência):</span> {{det.linkedin}}</div>
+            <sc-if value="{{det.hasCnpjOrig}}" hint-placeholder-val="{{false}}"><div style="grid-column:1/-1;"><span style="color:#6E7076;">CNPJ:</span> {{det.cnpjOrig}}</div></sc-if>
+            <sc-if value="{{det.hasObs}}" hint-placeholder-val="{{false}}"><div style="grid-column:1/-1;"><span style="color:#6E7076;">Observações:</span> {{det.obs}}</div></sc-if>
+          </div>
+        </div>
+
+        <sc-if value="{{det.hasError}}" hint-placeholder-val="{{false}}">
+          <div style="background:#FBEAE2;border:1px solid #E8C3B2;border-radius:10px;padding:12px 16px;font-size:13.5px;color:#9A3218;">
+            <strong>Erro no processamento</strong> ({{det.attempts}} tentativa/s): {{det.lastError}}
+          </div>
+        </sc-if>
+
+        <sc-if value="{{det.hasAnalysis}}" hint-placeholder-val="{{false}}">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:#6E7076;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Resultado da análise</div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+              <span style="font-size:12.5px;font-weight:600;padding:5px 12px;border-radius:999px;background:{{det.badgeBg}};color:{{det.badgeColor}};">{{det.badgeLabel}}</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;color:{{det.scoreColor}};">score {{det.score}}/100</span>
+              <span style="font-size:12px;color:#6E7076;">{{det.scoreFaixa}}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:13.5px;background:#F7F6F2;border-radius:10px;padding:14px 16px;">
+              <div><span style="color:#6E7076;">Continua na empresa:</span> <strong>{{det.continua}}</strong></div>
+              <div><span style="color:#6E7076;">Equivalência de cargo:</span> <strong>{{det.equiv}}</strong></div>
+              <div><span style="color:#6E7076;">Empresa atual provável:</span> <strong>{{det.empresaAtual}}</strong></div>
+              <div><span style="color:#6E7076;">CNPJ da empresa:</span> <strong>{{det.cnpj}}</strong></div>
+              <div><span style="color:#6E7076;">Cargo atual provável:</span> <strong>{{det.cargoAtual}}</strong></div>
+              <div><span style="color:#6E7076;">Risco de homônimo:</span> <strong>{{det.risco}}</strong></div>
+              <div><span style="color:#6E7076;">Revisão humana:</span> <strong>{{det.rev}}</strong></div>
+              <div style="grid-column:1/-1;"><span style="color:#6E7076;">Ação recomendada:</span> <strong>{{det.acao}}</strong></div>
+            </div>
+            <div style="margin-top:12px;font-size:14px;line-height:1.6;color:#1B1E22;background:#FFFFFF;border:1px solid #E4E2DB;border-radius:10px;padding:14px 16px;">{{det.resumo}}</div>
+          </div>
+
+          <sc-if value="{{hasDetEvidencias}}" hint-placeholder-val="{{false}}">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#6E7076;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Evidências</div>
+              <ul style="margin:0;padding-left:20px;font-size:13.5px;line-height:1.7;color:#3D4045;">
+                <sc-for list="{{detEvidencias}}" as="ev" hint-placeholder-count="2"><li>{{ev}}</li></sc-for>
+              </ul>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{hasDetFontes}}" hint-placeholder-val="{{false}}">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#6E7076;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Fontes</div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <sc-for list="{{detFontes}}" as="f" hint-placeholder-count="2">
+                  <div style="border:1px solid #E4E2DB;border-radius:10px;padding:12px 14px;font-size:13px;">
+                    <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;">
+                      <strong style="font-size:13.5px;">{{f.titulo}}</strong>
+                      <span style="font-size:11px;font-weight:600;color:{{f.forcaColor}};white-space:nowrap;">evidência {{f.forca_evidencia}}</span>
+                    </div>
+                    <div style="color:#6E7076;margin:4px 0;line-height:1.5;">{{f.snippet_relevante}}</div>
+                    <a href="{{f.url}}" target="_blank" rel="noopener" style="font-size:12.5px;word-break:break-all;">{{f.url}}</a>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{hasDetDuvidas}}" hint-placeholder-val="{{false}}">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#6E7076;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Pontos de dúvida</div>
+              <ul style="margin:0;padding-left:20px;font-size:13.5px;line-height:1.7;color:#9A6A00;">
+                <sc-for list="{{detDuvidas}}" as="d" hint-placeholder-count="1"><li>{{d}}</li></sc-for>
+              </ul>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{hasDetSub}}" hint-placeholder-val="{{false}}">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#6E7076;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Substituto sugerido</div>
+              <div style="border:1px solid #BDD9D2;background:#F4F8F7;border-radius:10px;padding:14px 16px;font-size:13.5px;line-height:1.7;">
+                <div><strong style="font-size:14.5px;">{{detSub.nome}}</strong> — {{detSub.cargo}}</div>
+                <div style="color:#3D4045;">{{detSub.empresa}} · score {{detSub.score_confianca}}/100</div>
+                <div style="color:#6E7076;margin-top:4px;">{{detSub.motivo_sugestao}}</div>
+                <sc-if value="{{detSubHasLink}}" hint-placeholder-val="{{false}}"><a href="{{detSub.link_publico}}" target="_blank" rel="noopener" style="font-size:12.5px;word-break:break-all;">{{detSub.link_publico}}</a></sc-if>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{hasDetBuscas}}" hint-placeholder-val="{{false}}">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:#6E7076;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">Buscas executadas</div>
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <sc-for list="{{detBuscas}}" as="b" hint-placeholder-count="2">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6E7076;background:#F7F6F2;border-radius:6px;padding:6px 10px;">{{b}}</div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="font-size:12px;color:#8A8C90;">Analisado em {{det.analyzedAt}}</div>
+        </sc-if>
+
+        <div style="display:flex;gap:10px;padding-bottom:24px;">
+          <sc-if value="{{det.canReview}}" hint-placeholder-val="{{false}}">
+            <button onClick="{{onMarkReviewed}}" style="background:#0E5E54;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-weight:600;" style-hover="background:#0A463F;">✓ Marcar como revisado</button>
+          </sc-if>
+          <sc-if value="{{det.isReviewed}}" hint-placeholder-val="{{false}}">
+            <span style="display:inline-flex;align-items:center;font-size:13px;color:#1F7A4D;font-weight:600;">✓ Revisado</span>
+          </sc-if>
+          <button onClick="{{onReprocessOne}}" style="background:#fff;border:1px solid #D6D4CC;border-radius:8px;padding:10px 18px;font-weight:600;color:#3D4045;" style-hover="background:#F2F1EC;">↻ Reprocessar contato</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===================== CONFIGURAÇÕES ===================== -->
+  <sc-if value="{{settingsOpen}}" hint-placeholder-val="{{false}}">
+    <div style="position:fixed;inset:0;background:rgba(27,30,34,0.35);z-index:50;" onClick="{{onCloseSettings}}"></div>
+    <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(620px,94vw);max-height:88vh;overflow-y:auto;background:#fff;border-radius:16px;z-index:51;box-shadow:0 20px 60px rgba(0,0,0,0.25);padding:28px 30px;">
+      <h2 style="margin:0 0 4px;font-size:20px;font-weight:700;">Configurações</h2>
+      <p style="margin:0 0 20px;font-size:13.5px;color:#6E7076;line-height:1.5;">As chaves ficam salvas apenas neste navegador. A análise por IA já está integrada — nenhuma chave é necessária para ela.</p>
+
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div>
+          <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Provedor de busca web</label>
+          <select value="{{sProvider}}" data-key="provider" onChange="{{onSettingChange}}" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 10px;background:#fff;width:100%;">
+            <sc-for list="{{providerOptions}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for>
+          </select>
+          <div style="font-size:12.5px;color:#6E7076;margin-top:6px;line-height:1.5;">{{providerHint}}</div>
+        </div>
+
+        <sc-if value="{{showTavily}}" hint-placeholder-val="{{false}}">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Chave da API Tavily</label>
+            <input type="password" value="{{sTavilyKey}}" data-key="tavilyKey" onChange="{{onSettingChange}}" placeholder="tvly-…" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 12px;width:100%;font-family:'IBM Plex Mono',monospace;">
+            <div style="font-size:12.5px;color:#6E7076;margin-top:6px;">Crie uma chave gratuita em <a href="https://tavily.com" target="_blank" rel="noopener">tavily.com</a>.</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{showGoogle}}" hint-placeholder-val="{{false}}">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Google API Key</label>
+              <input type="password" value="{{sGoogleKey}}" data-key="googleKey" onChange="{{onSettingChange}}" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 12px;width:100%;font-family:'IBM Plex Mono',monospace;">
+            </div>
+            <div>
+              <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Search Engine ID (cx)</label>
+              <input value="{{sGoogleCx}}" data-key="googleCx" onChange="{{onSettingChange}}" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 12px;width:100%;font-family:'IBM Plex Mono',monospace;">
+            </div>
+            <div style="grid-column:1/-1;font-size:12.5px;color:#6E7076;">Configure em <a href="https://programmablesearchengine.google.com" target="_blank" rel="noopener">programmablesearchengine.google.com</a> (buscar em toda a web).</div>
+          </div>
+        </sc-if>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Modelo de IA</label>
+            <select value="{{sModel}}" data-key="model" onChange="{{onSettingChange}}" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 10px;background:#fff;width:100%;">
+              <sc-for list="{{modelOptions}}" as="o" hint-placeholder-count="3"><option value="{{o.v}}">{{o.l}}</option></sc-for>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Máx. tentativas por contato</label>
+            <select value="{{sMaxAttempts}}" data-key="maxAttempts" onChange="{{onSettingChange}}" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 10px;background:#fff;width:100%;">
+              <sc-for list="{{attemptOptions}}" as="o" hint-placeholder-count="3"><option value="{{o.v}}">{{o.l}}</option></sc-for>
+            </select>
+          </div>
+        </div>
+
+        <sc-if value="{{needsAnthropicKey}}" hint-placeholder-val="{{false}}">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Chave da API Anthropic (IA)</label>
+            <input type="password" value="{{sAnthropicKey}}" data-key="anthropicKey" onChange="{{onSettingChange}}" placeholder="sk-ant-…" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 12px;width:100%;font-family:'IBM Plex Mono',monospace;">
+            <div style="font-size:12.5px;color:#6E7076;margin-top:6px;line-height:1.5;">O sistema está rodando fora do ambiente com IA integrada (ex.: Vercel), então precisa de uma chave própria. Crie em <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>. Fica salva apenas neste navegador.</div>
+          </div>
+        </sc-if>
+
+        <div style="background:#F7F6F2;border-radius:10px;padding:12px 16px;font-size:12.5px;color:#6E7076;line-height:1.6;">
+          Compliance: o sistema usa apenas fontes públicas via API de busca. Não acessa o LinkedIn diretamente, não usa login, cookies ou automação de navegação. O ritmo de processamento (~1 contato a cada 4–5 s) respeita os limites da IA integrada.
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:10px;">
+          <button onClick="{{onCloseSettings}}" style="background:#fff;border:1px solid #D6D4CC;border-radius:8px;padding:10px 18px;font-weight:600;color:#3D4045;" style-hover="background:#F2F1EC;">Fechar</button>
+          <button onClick="{{onSaveSettings}}" style="background:#0E5E54;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:600;" style-hover="background:#0A463F;">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- toast -->
+  <sc-if value="{{hasToast}}" hint-placeholder-val="{{false}}">
+    <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1B1E22;color:#fff;border-radius:10px;padding:12px 20px;font-size:13.5px;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,0.3);max-width:90vw;">{{toastMsg}}</div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;autoIniciar&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Comportamento&quot; },
+  &quot;linhasPrevia&quot;: { &quot;editor&quot;: &quot;int&quot;, &quot;default&quot;: 5, &quot;min&quot;: 3, &quot;max&quot;: 15, &quot;tsType&quot;: &quot;number&quot;, &quot;section&quot;: &quot;Comportamento&quot; },
+  &quot;mostrarCompliance&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Comportamento&quot; }
+}">
+class Component extends DCLogic {
+  state = {
+    ready: false,
+    view: 'home',
+    jobs: [],
+    settingsOpen: false,
+    toast: null,
+    // wizard
+    step: 1,
+    file: null,
+    mapping: {},
+    mode: 'completo',
+    fileError: '',
+    mapError: '',
+    creating: false,
+    // job
+    currentJob: null,
+    contacts: [],
+    analyses: {},
+    runningJobId: null,
+    currentContactName: '',
+    // filtros
+    fQ: '', fStatus: 'todos', fMin: '0', fRev: false, fSub: false,
+    detailId: null,
+    settings: { provider: 'demo', tavilyKey: '', googleKey: '', googleCx: '', model: 'auto', maxAttempts: 3, anthropicKey: '' },
+  };
+
+  ensureReady() {
+    if (!this.E || !this.state.ready) { this.toast('Aguarde um instante — o sistema ainda está carregando.'); return false; }
+    return true;
+  }
+
+  LB = {
+    jobStatus: {
+      criado: { l: 'Criada', bg: '#EEEDE8', c: '#6E7076' },
+      em_processamento: { l: 'Em processamento', bg: '#E3EEEB', c: '#0E5E54' },
+      pausado: { l: 'Pausada', bg: '#FDF3E0', c: '#9A6A00' },
+      concluido: { l: 'Concluída', bg: '#E1F0E7', c: '#1F7A4D' },
+      cancelado: { l: 'Cancelada', bg: '#F0EFE9', c: '#8A8C90' },
+      erro: { l: 'Erro', bg: '#FBEAE2', c: '#B4452B' },
+    },
+    statusV: {
+      confirmado_na_empresa: { l: 'Confirmado na empresa', bg: '#E1F0E7', c: '#1F7A4D' },
+      provavelmente_na_empresa: { l: 'Provavelmente na empresa', bg: '#E9F3EC', c: '#3E8E5C' },
+      cargo_atualizado_na_mesma_empresa: { l: 'Cargo atualizado', bg: '#E4EBF7', c: '#2456A6' },
+      provavel_saida_da_empresa: { l: 'Provável saída', bg: '#FBEAE2', c: '#B4452B' },
+      saida_confirmada: { l: 'Saída confirmada', bg: '#F8DFD6', c: '#9A3218' },
+      inconclusivo: { l: 'Inconclusivo', bg: '#EEEDE8', c: '#6E7076' },
+      risco_de_homonimo: { l: 'Risco de homônimo', bg: '#F0E8F6', c: '#7A4DA0' },
+    },
+    proc: {
+      pendente: 'pendente',
+      em_processamento: 'em processamento',
+      processado: 'processado',
+      erro: 'erro',
+      revisao_humana: 'aguarda revisão humana',
+      reprocessar: 'na fila para reprocessar',
+    },
+    acao: {
+      manter_contato: 'Manter contato', atualizar_cargo: 'Atualizar cargo', atualizar_empresa: 'Atualizar empresa',
+      revisar_manual: 'Revisar manualmente', remover_abordagem_ativa: 'Remover abordagem ativa',
+      tentar_novo_decisor: 'Tentar novo decisor', validar_por_telefone: 'Validar por telefone',
+      validar_por_email: 'Validar por e-mail', reprocessar_depois: 'Reprocessar depois', sem_acao: 'Sem ação',
+    },
+    equiv: {
+      mesmo_cargo: 'Mesmo cargo', cargo_equivalente: 'Cargo equivalente', cargo_mais_alto: 'Cargo mais alto',
+      cargo_mais_baixo: 'Cargo mais baixo', mesma_area_cargo_diferente: 'Mesma área, cargo diferente',
+      outra_area: 'Outra área', cargo_nao_identificado: 'Cargo não identificado',
+      mudou_de_empresa: 'Mudou de empresa', inconclusivo: 'Inconclusivo',
+    },
+    provider: { demo: 'simulação', tavily: 'Tavily', google: 'Google CSE', none: 'somente IA' },
+  };
+
+  FIELDS = [
+    { key: 'nome', label: 'Nome', req: true },
+    { key: 'sobrenome', label: 'Sobrenome', req: false },
+    { key: 'empresa', label: 'Empresa', req: true },
+    { key: 'cargo', label: 'Cargo', req: false },
+    { key: 'telefone', label: 'Telefone', req: false },
+    { key: 'email', label: 'E-mail', req: false },
+    { key: 'linkedin', label: 'LinkedIn', req: false },
+    { key: 'cnpj', label: 'CNPJ', req: false },
+    { key: 'observacoes', label: 'Observações', req: false },
+  ];
+
+  MODES = [
+    { key: 'rapido', label: 'Rápido', desc: 'Menos buscas por contato. Menor custo, mais chance de resultados inconclusivos.' },
+    { key: 'completo', label: 'Completo', desc: 'Equilíbrio entre custo e qualidade. Busca substituto quando há sinal de saída. Recomendado.' },
+    { key: 'estrategico', label: 'Estratégico', desc: 'Para contas importantes (ABM). Mais buscas, mais evidências e explicação detalhada.' },
+  ];
+
+  async componentDidMount() {
+    this.E = await import('./engine.js');
+    try {
+      const saved = localStorage.getItem('radar-settings-v1');
+      if (saved) this.setState({ settings: { ...this.state.settings, ...JSON.parse(saved) } });
+    } catch (e) {}
+    await this.E.openDb();
+    // Recuperação: se o app fechou no meio do processamento, marca como pausado
+    const jobs = await this.E.getAll('jobs');
+    for (const j of jobs) {
+      if (j.status === 'em_processamento') { j.status = 'pausado'; j.interrompido = true; await this.E.put('jobs', j); }
+    }
+    const contacts = await this.E.getAll('contacts');
+    for (const c of contacts) {
+      if (c.status_processamento === 'em_processamento') { c.status_processamento = 'pendente'; await this.E.put('contacts', c); }
+    }
+    await this.reloadJobs();
+    this.setState({ ready: true });
+  }
+
+  toast(msg) {
+    clearTimeout(this._toastT);
+    this.setState({ toast: msg });
+    this._toastT = setTimeout(() => this.setState({ toast: null }), 4200);
+  }
+
+  fmtDate(ts) {
+    if (!ts) return '';
+    return new Date(ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  async reloadJobs() {
+    const jobs = (await this.E.getAll('jobs')).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    this.setState({ jobs });
+  }
+
+  async reloadJobData(jobId) {
+    const job = await this.E.get('jobs', jobId);
+    if (!job) return;
+    const contacts = (await this.E.byIndex('contacts', 'job_id', jobId)).sort((a, b) => a.row_number - b.row_number);
+    const list = await this.E.byIndex('analyses', 'job_id', jobId);
+    const analyses = {};
+    for (const a of list) analyses[a.contact_id] = a;
+    if (this.state.currentJob && this.state.currentJob.id === jobId) {
+      this.setState({ currentJob: job, contacts, analyses });
+    }
+    await this.reloadJobs();
+  }
+
+  async openJob(jobId) {
+    const job = await this.E.get('jobs', jobId);
+    if (!job) return;
+    const contacts = (await this.E.byIndex('contacts', 'job_id', jobId)).sort((a, b) => a.row_number - b.row_number);
+    const list = await this.E.byIndex('analyses', 'job_id', jobId);
+    const analyses = {};
+    for (const a of list) analyses[a.contact_id] = a;
+    this.setState({ view: 'job', currentJob: job, contacts, analyses, detailId: null, fQ: '', fStatus: 'todos', fMin: '0', fRev: false, fSub: false });
+  }
+
+  // ---------- processamento ----------
+  async runJob(jobId) {
+    if (!this.ensureReady()) return;
+    if (this.state.runningJobId) { this.toast('Já existe uma análise em processamento. Pause-a antes de iniciar outra.'); return; }
+    if (!this.E.hasNativeAI() && !String(this.state.settings.anthropicKey || '').trim()) {
+      this.toast('Para processar aqui, configure a chave da API Anthropic em Configurações.');
+      this.setState({ settingsOpen: true });
+      return;
+    }
+    this._pause = false;
+    let job = await this.E.get('jobs', jobId);
+    if (!job) return;
+    job.status = 'em_processamento';
+    job.updated_at = Date.now();
+    delete job.interrompido;
+    await this.E.put('jobs', job);
+    this.setState({ runningJobId: jobId });
+    await this.reloadJobData(jobId);
+    const maxAtt = Number(this.state.settings.maxAttempts) || 3;
+
+    while (true) {
+      if (this._pause) { await this.setJobStatus(jobId, 'pausado'); break; }
+      job = await this.E.get('jobs', jobId);
+      if (!job || job.status === 'cancelado') break;
+      const all = await this.E.byIndex('contacts', 'job_id', jobId);
+      const next = all
+        .filter((c) => c.status_processamento === 'pendente' || c.status_processamento === 'reprocessar')
+        .sort((a, b) => a.row_number - b.row_number)[0];
+      if (!next) {
+        job.status = 'concluido';
+        job.completed_at = Date.now();
+        job.updated_at = Date.now();
+        await this.E.put('jobs', job);
+        this.toast('Análise concluída.');
+        break;
+      }
+      next.status_processamento = 'em_processamento';
+      next.updated_at = Date.now();
+      await this.E.put('contacts', next);
+      this.setState({ currentContactName: (next.original && next.original.nome) || 'linha ' + next.row_number });
+      await this.reloadJobData(jobId);
+      try {
+        const { analysis, buscas, raw } = await this.E.analyzeContact(next, job, this.state.settings);
+        await this.E.put('analyses', {
+          contact_id: next.id, job_id: jobId, ...analysis,
+          buscas_executadas: buscas, raw_ai_response: raw,
+          analyzed_at: new Date().toISOString(),
+        });
+        next.status_processamento = analysis.precisa_revisao_humana ? 'revisao_humana' : 'processado';
+        next.last_error = '';
+      } catch (e) {
+        next.attempts = (next.attempts || 0) + 1;
+        next.last_error = String((e && e.message) || e);
+        next.status_processamento = 'erro';
+      }
+      next.updated_at = Date.now();
+      await this.E.put('contacts', next);
+      const done = (await this.E.byIndex('contacts', 'job_id', jobId))
+        .filter((c) => ['processado', 'revisao_humana', 'erro'].includes(c.status_processamento)).length;
+      job = await this.E.get('jobs', jobId);
+      if (!job) break;
+      job.linhas_processadas = done;
+      job.updated_at = Date.now();
+      await this.E.put('jobs', job);
+      await this.reloadJobData(jobId);
+      if (this._pause) { await this.setJobStatus(jobId, 'pausado'); break; }
+      // respeita o limite de chamadas da IA integrada (15/min); com chave própria o ritmo pode ser maior
+      await new Promise((r) => setTimeout(r, this.E.hasNativeAI() ? 4300 : 1600));
+    }
+    this.setState({ runningJobId: null, currentContactName: '' });
+    await this.reloadJobData(jobId);
+  }
+
+  async setJobStatus(jobId, status) {
+    const job = await this.E.get('jobs', jobId);
+    if (!job) return;
+    job.status = status;
+    job.updated_at = Date.now();
+    await this.E.put('jobs', job);
+    await this.reloadJobData(jobId);
+  }
+
+  // ---------- handlers ----------
+  onGoHome = () => { this.setState({ view: 'home', detailId: null }); this.reloadJobs(); };
+  onNewAnalysis = () => this.setState({ view: 'new', step: 1, file: null, mapping: {}, mode: 'completo', fileError: '', mapError: '', creating: false });
+  onOpenSettings = () => this.setState({ settingsOpen: true });
+  onCloseSettings = () => this.setState({ settingsOpen: false });
+  onSaveSettings = () => {
+    localStorage.setItem('radar-settings-v1', JSON.stringify(this.state.settings));
+    this.setState({ settingsOpen: false });
+    this.toast('Configurações salvas.');
+  };
+  onSettingChange = (e) => {
+    const key = e.currentTarget.dataset.key;
+    const value = e.currentTarget.value;
+    this.setState({ settings: { ...this.state.settings, [key]: value } });
+  };
+
+  exportJobFromHome = async (jobId) => {
+    if (!this.ensureReady()) return;
+    try {
+      const job = await this.E.get('jobs', jobId);
+      if (!job) return;
+      const contacts = (await this.E.byIndex('contacts', 'job_id', jobId)).sort((a, b) => a.row_number - b.row_number);
+      const list = await this.E.byIndex('analyses', 'job_id', jobId);
+      const map = {};
+      for (const a of list) map[a.contact_id] = a;
+      this.E.exportExcel(job, contacts.map((c) => ({ contact: c, analysis: map[c.id] || null })));
+    } catch (err) {
+      this.toast(String((err && err.message) || err));
+    }
+  };
+
+  onFileChange = async (e) => {
+    if (!this.ensureReady()) { e.target.value = ''; return; }
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const parsed = await this.E.parseFile(file);
+      const mapping = this.E.guessMapping(parsed.columns);
+      this.setState({ file: { name: file.name, columns: parsed.columns, rows: parsed.rows }, mapping, step: 2, fileError: '', mapError: '' });
+    } catch (err) {
+      this.setState({ fileError: String((err && err.message) || err) });
+    }
+    e.target.value = '';
+  };
+
+  onMapChange = (e) => {
+    const key = e.currentTarget.dataset.key;
+    const value = e.currentTarget.value;
+    this.setState({ mapping: { ...this.state.mapping, [key]: value }, mapError: '' });
+  };
+
+  onBackToUpload = () => this.setState({ step: 1 });
+  onBackToMapping = () => this.setState({ step: 2 });
+  onToConfig = () => {
+    const m = this.state.mapping;
+    if (!m.nome || !m.empresa) {
+      this.setState({ mapError: 'Mapeie ao menos as colunas obrigatórias: Nome e Empresa.' });
+      return;
+    }
+    this.setState({ step: 3, mapError: '' });
+  };
+  onSelectMode = (e) => this.setState({ mode: e.currentTarget.dataset.key });
+
+  onCreateJob = async () => {
+    if (!this.ensureReady()) return;
+    if (this.state.creating) return;
+    this.setState({ creating: true });
+    const { file, mapping, mode } = this.state;
+    const jobId = this.E.uid();
+    const now = Date.now();
+    const job = {
+      id: jobId, nome_arquivo: file.name, total_linhas: file.rows.length, linhas_processadas: 0,
+      status: 'criado', modo: mode, mapping, created_at: now, updated_at: now, completed_at: null,
+    };
+    const pick = (row, key) => (mapping[key] ? String(row[mapping[key]] || '').trim() : '');
+    const isNum = (s) => /^\d+$/.test(String(s).trim());
+    let invalidCount = 0;
+    const contacts = file.rows.map((row, i) => {
+      // saneamento: sobrenome/cargo numéricos são lixo de exportação; LinkedIn só se for de fato LinkedIn
+      const sobrenome = pick(row, 'sobrenome');
+      const nome = [pick(row, 'nome'), isNum(sobrenome) ? '' : sobrenome].filter(Boolean).join(' ').trim();
+      const empresa = pick(row, 'empresa');
+      let cargo = pick(row, 'cargo');
+      if (isNum(cargo)) cargo = '';
+      let linkedin = pick(row, 'linkedin');
+      if (linkedin && !/linkedin/i.test(linkedin)) linkedin = '';
+      const invalid = !nome || !empresa || isNum(nome) || isNum(empresa);
+      if (invalid) invalidCount++;
+      return {
+        id: this.E.uid(), job_id: jobId, row_number: i + 1,
+        original: {
+          nome, empresa, cargo,
+          telefone: pick(row, 'telefone'), email: pick(row, 'email'),
+          linkedin, cnpj: pick(row, 'cnpj'), observacoes: pick(row, 'observacoes'),
+        },
+        original_row: row,
+        status_processamento: invalid ? 'erro' : 'pendente',
+        attempts: 0,
+        last_error: invalid ? 'Linha com dados incompletos ou inválidos (sem nome/empresa utilizáveis) — não processada.' : '',
+        revisado: false,
+        created_at: now, updated_at: now,
+      };
+    });
+    await this.E.put('jobs', job);
+    await this.E.bulkPut('contacts', contacts);
+    if (invalidCount) this.toast(invalidCount + ' linha(s) com dados incompletos foram marcadas como erro e não serão processadas.');
+    await this.openJob(jobId);
+    this.setState({ creating: false });
+    const auto = this.props.autoIniciar ?? true;
+    if (auto) this.runJob(jobId);
+  };
+
+  onPause = () => {
+    this._pause = true;
+    this.toast('Pausando… o contato atual será concluído antes de parar.');
+  };
+  onResume = () => {
+    const j = this.state.currentJob;
+    if (j) this.runJob(j.id);
+  };
+  onCancel = async () => {
+    const j = this.state.currentJob;
+    if (!j) return;
+    if (!confirm('Cancelar esta análise? Os resultados já processados serão mantidos.')) return;
+    this._pause = true;
+    await this.setJobStatus(j.id, 'cancelado');
+  };
+  onExport = () => {
+    const { currentJob, contacts, analyses } = this.state;
+    if (!currentJob) return;
+    try {
+      const merged = contacts.map((c) => ({ contact: c, analysis: analyses[c.id] || null }));
+      this.E.exportExcel(currentJob, merged);
+    } catch (e) {
+      this.toast(String((e && e.message) || e));
+    }
+  };
+
+  reprocessSet = async (filterFn) => {
+    const { currentJob, contacts, analyses } = this.state;
+    if (!currentJob) return;
+    let n = 0;
+    for (const c of contacts) {
+      if (filterFn(c, analyses[c.id])) {
+        c.status_processamento = 'reprocessar';
+        c.updated_at = Date.now();
+        await this.E.put('contacts', c);
+        n++;
+      }
+    }
+    await this.reloadJobData(currentJob.id);
+    if (n && !this.state.runningJobId) this.runJob(currentJob.id);
+  };
+  onReprocessErrors = () => this.reprocessSet((c) => c.status_processamento === 'erro');
+  onReprocessInconclusive = () => this.reprocessSet((c, a) => a && (a.status_validacao === 'inconclusivo' || a.status_validacao === 'risco_de_homonimo'));
+
+  onFQ = (e) => this.setState({ fQ: e.target.value });
+  onFStatus = (e) => this.setState({ fStatus: e.target.value });
+  onFMin = (e) => this.setState({ fMin: e.target.value });
+  onFRev = (e) => this.setState({ fRev: e.target.checked });
+  onFSub = (e) => this.setState({ fSub: e.target.checked });
+
+  onCloseDetail = () => this.setState({ detailId: null });
+  onMarkReviewed = async () => {
+    const c = this.state.contacts.find((x) => x.id === this.state.detailId);
+    if (!c) return;
+    c.revisado = true;
+    if (c.status_processamento === 'revisao_humana') c.status_processamento = 'processado';
+    c.updated_at = Date.now();
+    await this.E.put('contacts', c);
+    await this.reloadJobData(c.job_id);
+  };
+  onReprocessOne = async () => {
+    const c = this.state.contacts.find((x) => x.id === this.state.detailId);
+    if (!c) return;
+    c.status_processamento = 'reprocessar';
+    c.revisado = false;
+    c.updated_at = Date.now();
+    await this.E.put('contacts', c);
+    await this.reloadJobData(c.job_id);
+    this.setState({ detailId: null });
+    if (!this.state.runningJobId) this.runJob(c.job_id);
+    else this.toast('Contato entrou na fila de reprocessamento.');
+  };
+
+  deleteJob = async (jobId) => {
+    if (this.state.runningJobId === jobId) { this.toast('Pause a análise antes de excluí-la.'); return; }
+    if (!confirm('Excluir esta análise e todos os seus resultados?')) return;
+    await this.E.deleteJobCascade(jobId);
+    await this.reloadJobs();
+  };
+
+  scoreColor(s) { return s >= 75 ? '#1F7A4D' : s >= 50 ? '#9A6A00' : '#B4452B'; }
+  scoreFaixa(s) {
+    return s >= 90 ? 'muito confiável' : s >= 75 ? 'confiável' : s >= 50 ? 'médio — revisar' : s >= 25 ? 'baixo' : 'muito baixo';
+  }
+
+  // ---------- renderVals ----------
+  renderVals() {
+    const st = this.state;
+    const LB = this.LB;
+    const settings = st.settings;
+
+    // home
+    const jobs = st.jobs.map((j) => {
+      const s = LB.jobStatus[j.status] || LB.jobStatus.criado;
+      const pct = j.total_linhas ? Math.round(((j.linhas_processadas || 0) / j.total_linhas) * 100) : 0;
+      return {
+        id: j.id, name: j.nome_arquivo,
+        modeLabel: j.modo || 'completo',
+        statusLabel: st.runningJobId === j.id ? 'Em processamento' : s.l,
+        statusBg: s.bg, statusColor: s.c,
+        progressPct: pct, progressText: (j.linhas_processadas || 0) + ' de ' + j.total_linhas + ' contatos',
+        createdAt: this.fmtDate(j.created_at),
+        wasInterrupted: !!j.interrompido && st.runningJobId !== j.id,
+        canContinue: ['pausado', 'criado'].includes(j.status) && st.runningJobId !== j.id,
+        hasProgress: (j.linhas_processadas || 0) > 0,
+        onOpen: () => this.openJob(j.id),
+        onContinue: (e) => { e.stopPropagation(); this.openJob(j.id).then(() => this.runJob(j.id)); },
+        onExportRow: (e) => { e.stopPropagation(); this.exportJobFromHome(j.id); },
+        onDelete: (e) => { e.stopPropagation(); this.deleteJob(j.id); },
+      };
+    });
+
+    // wizard
+    const file = st.file || { name: '', columns: [], rows: [] };
+    const nPrev = Math.max(1, Number(this.props.linhasPrevia ?? 5));
+    const previewCols = file.columns;
+    const previewRows = file.rows.slice(0, nPrev).map((r) => ({ cells: file.columns.map((c) => String(r[c] || '')) }));
+    const mapOptions = [{ v: '', l: '— não mapear —' }].concat(file.columns.map((c) => ({ v: c, l: c })));
+    const mapFields = this.FIELDS.map((f) => ({
+      key: f.key, label: f.label, reqMark: f.req ? '*' : '', value: st.mapping[f.key] || '',
+    }));
+    const modeCards = this.MODES.map((m) => ({
+      ...m,
+      border: st.mode === m.key ? '#0E5E54' : '#E4E2DB',
+      bg: st.mode === m.key ? '#F4F8F7' : '#FFFFFF',
+      onSelect: (e) => this.setState({ mode: e.currentTarget.dataset.key }),
+    }));
+
+    // job
+    const job = st.currentJob;
+    const contacts = st.contacts;
+    const analyses = st.analyses;
+    const isJobRunning = job && st.runningJobId === job.id;
+    const js = job ? (LB.jobStatus[job.status] || LB.jobStatus.criado) : LB.jobStatus.criado;
+    const cProcN = contacts.filter((c) => ['processado', 'revisao_humana'].includes(c.status_processamento)).length;
+    const cErrN = contacts.filter((c) => c.status_processamento === 'erro').length;
+    const cPendN = contacts.filter((c) => ['pendente', 'em_processamento', 'reprocessar'].includes(c.status_processamento)).length;
+    const cIncN = contacts.filter((c) => { const a = analyses[c.id]; return a && (a.status_validacao === 'inconclusivo' || a.status_validacao === 'risco_de_homonimo'); }).length;
+    const cRevN = contacts.filter((c) => { const a = analyses[c.id]; return (a && a.precisa_revisao_humana && !c.revisado) || c.status_processamento === 'revisao_humana'; }).length;
+    const jobPct = job && job.total_linhas ? Math.round(((cProcN + cErrN) / job.total_linhas) * 100) : 0;
+
+    // linhas filtradas
+    const q = st.fQ.trim().toLowerCase();
+    const minScore = Number(st.fMin) || 0;
+    const resultRows = contacts
+      .map((c) => ({ c, a: analyses[c.id] || null }))
+      .filter(({ c, a }) => {
+        if (q) {
+          const o = c.original || {};
+          const hay = [o.nome, o.empresa, o.cargo, a && a.cargo_atual_provavel, a && a.empresa_atual_provavel].join(' ').toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        if (st.fStatus !== 'todos') {
+          if (st.fStatus === 'f_erro') { if (c.status_processamento !== 'erro') return false; }
+          else if (st.fStatus === 'f_pendente') { if (!['pendente', 'em_processamento', 'reprocessar'].includes(c.status_processamento)) return false; }
+          else if (!a || a.status_validacao !== st.fStatus) return false;
+        }
+        if (minScore > 0 && (!a || a.score_confianca < minScore)) return false;
+        if (st.fRev && !(a && a.precisa_revisao_humana)) return false;
+        if (st.fSub && !(a && a.substituto_sugerido)) return false;
+        return true;
+      })
+      .map(({ c, a }) => {
+        const o = c.original || {};
+        let badge;
+        if (a) badge = LB.statusV[a.status_validacao] || LB.statusV.inconclusivo;
+        else if (c.status_processamento === 'erro') badge = { l: 'Erro', bg: '#FBEAE2', c: '#B4452B' };
+        else if (c.status_processamento === 'em_processamento') badge = { l: 'Processando…', bg: '#E3EEEB', c: '#0E5E54' };
+        else badge = { l: 'Pendente', bg: '#F0EFE9', c: '#8A8C90' };
+        return {
+          id: c.id, n: c.row_number,
+          nome: o.nome || '(sem nome)', empresa: o.empresa || '—', cargoOrig: o.cargo || '—',
+          badgeLabel: badge.l, badgeBg: badge.bg, badgeColor: badge.c,
+          score: a ? String(a.score_confianca) : '—',
+          scoreColor: a ? this.scoreColor(a.score_confianca) : '#8A8C90',
+          cargoAtual: a && a.cargo_atual_provavel ? a.cargo_atual_provavel : '—',
+          acao: a ? (LB.acao[a.acao_recomendada] || a.acao_recomendada) : '—',
+          needsRev: !!(a && a.precisa_revisao_humana && !c.revisado),
+          hasSub: !!(a && a.substituto_sugerido),
+          onOpen: () => this.setState({ detailId: c.id }),
+        };
+      });
+
+    const statusFilterOptions = [{ v: 'todos', l: 'Status: todos' }]
+      .concat(Object.entries(LB.statusV).map(([v, s]) => ({ v, l: s.l })))
+      .concat([{ v: 'f_erro', l: 'Erro de processamento' }, { v: 'f_pendente', l: 'Pendentes' }]);
+    const scoreFilterOptions = [
+      { v: '0', l: 'Score: todos' }, { v: '25', l: 'Score ≥ 25' }, { v: '50', l: 'Score ≥ 50' },
+      { v: '75', l: 'Score ≥ 75' }, { v: '90', l: 'Score ≥ 90' },
+    ];
+
+    // detalhe
+    let det = null, detFontes = [], detEvidencias = [], detDuvidas = [], detSub = null, detBuscas = [];
+    if (st.detailId) {
+      const c = contacts.find((x) => x.id === st.detailId);
+      if (c) {
+        const o = c.original || {};
+        const a = analyses[c.id] || null;
+        const badge = a ? (LB.statusV[a.status_validacao] || LB.statusV.inconclusivo) : { l: '', bg: '#EEE', c: '#666' };
+        det = {
+          n: c.row_number, nome: o.nome || '(sem nome)', empresa: o.empresa || '—', cargo: o.cargo || '—',
+          email: o.email || '—', telefone: o.telefone || '—', linkedin: o.linkedin || '—',
+          cnpjOrig: o.cnpj || '', hasCnpjOrig: !!o.cnpj,
+          obs: o.observacoes || '', hasObs: !!o.observacoes,
+          procLabel: LB.proc[c.status_processamento] || c.status_processamento,
+          hasError: !!c.last_error, lastError: c.last_error || '', attempts: c.attempts || 0,
+          hasAnalysis: !!a,
+          badgeLabel: badge.l, badgeBg: badge.bg, badgeColor: badge.c,
+          score: a ? a.score_confianca : 0,
+          scoreColor: a ? this.scoreColor(a.score_confianca) : '#888',
+          scoreFaixa: a ? this.scoreFaixa(a.score_confianca) : '',
+          continua: a ? (a.continua_na_empresa === true ? 'Sim' : a.continua_na_empresa === false ? 'Não' : 'Sem conclusão') : '',
+          equiv: a ? (LB.equiv[a.equivalencia_cargo] || a.equivalencia_cargo) : '',
+          empresaAtual: a && a.empresa_atual_provavel ? a.empresa_atual_provavel : '—',
+          cnpj: a && a.cnpj_empresa ? a.cnpj_empresa : '—',
+          cargoAtual: a && a.cargo_atual_provavel ? a.cargo_atual_provavel : '—',
+          risco: a ? (a.risco_homonimo ? 'Sim' : 'Não') : '',
+          rev: a ? (a.precisa_revisao_humana ? 'Sim' : 'Não') : '',
+          acao: a ? (LB.acao[a.acao_recomendada] || a.acao_recomendada) : '',
+          resumo: a ? a.resumo_analise : '',
+          analyzedAt: a && a.analyzed_at ? this.fmtDate(a.analyzed_at) : '',
+          canReview: !c.revisado && !!a,
+          isReviewed: !!c.revisado,
+        };
+        if (a) {
+          detFontes = (a.fontes || []).map((f) => ({
+            ...f,
+            forcaColor: f.forca_evidencia === 'alta' ? '#1F7A4D' : f.forca_evidencia === 'media' ? '#9A6A00' : '#8A8C90',
+          }));
+          detEvidencias = a.evidencias || [];
+          detDuvidas = a.pontos_de_duvida || [];
+          detSub = a.substituto_sugerido || null;
+          detBuscas = (a.buscas_executadas || []).map((b) => b.busca);
+        }
+      }
+    }
+
+    const providerOptions = [
+      { v: 'demo', l: 'Simulação (teste sem chave de API)' },
+      { v: 'tavily', l: 'Tavily (recomendado)' },
+      { v: 'google', l: 'Google Custom Search' },
+      { v: 'none', l: 'Sem busca — somente IA (conservador)' },
+    ];
+    const providerHints = {
+      demo: 'Gera resultados de busca fictícios, claramente marcados como [SIMULADO], para testar o fluxo completo sem custo. Troque por um provedor real antes de usar em produção.',
+      tavily: 'API de busca feita para IA, funciona direto do navegador. Plano gratuito disponível.',
+      google: 'Usa a API oficial Google Programmable Search (100 buscas/dia grátis).',
+      none: 'Nenhuma busca é feita; a IA analisa apenas os dados originais e tende a marcar quase tudo como inconclusivo.',
+    };
+    const modelOptions = [
+      { v: 'auto', l: 'Automático por modo (recomendado)' },
+      { v: 'claude-haiku-4-5', l: 'Claude Haiku — mais rápido' },
+      { v: 'claude-sonnet-4-5', l: 'Claude Sonnet — mais preciso' },
+    ];
+    const attemptOptions = [{ v: '1', l: '1' }, { v: '2', l: '2' }, { v: '3', l: '3' }, { v: '5', l: '5' }];
+
+    const stepC = (n) => (st.step === n ? '#0E5E54' : st.step > n ? '#1B1E22' : '#B3B1A8');
+
+    return {
+      // global
+      isHome: st.view === 'home', isNew: st.view === 'new', isJob: st.view === 'job',
+      isProcessing: !!st.runningJobId,
+      providerLabel: LB.provider[settings.provider] || settings.provider,
+      hasToast: !!st.toast, toastMsg: st.toast || '',
+      mostrarCompliance: this.props.mostrarCompliance ?? true,
+      onGoHome: this.onGoHome, onNewAnalysis: this.onNewAnalysis,
+      onOpenSettings: this.onOpenSettings, onCloseSettings: this.onCloseSettings,
+      settingsOpen: st.settingsOpen,
+      // home
+      jobs, hasJobs: jobs.length > 0, noJobs: st.ready && jobs.length === 0,
+      // wizard
+      isStep1: st.step === 1, isStep2: st.step === 2, isStep3: st.step === 3,
+      stepColor1: stepC(1), stepColor2: stepC(2), stepColor3: stepC(3),
+      onFileChange: this.onFileChange, hasFileError: !!st.fileError, fileError: st.fileError,
+      fileName: file.name,
+      rowCountLabel: file.rows.length + (file.rows.length === 1 ? ' linha' : ' linhas'),
+      colCountLabel: file.columns.length + ' colunas',
+      mapFields, mapOptions, onMapChange: this.onMapChange,
+      hasMapError: !!st.mapError, mapError: st.mapError,
+      previewCols, previewRows,
+      onBackToUpload: this.onBackToUpload, onToConfig: this.onToConfig, onBackToMapping: this.onBackToMapping,
+      modeCards, onCreateJob: this.onCreateJob,
+      createLabel: st.creating ? 'Criando…' : 'Criar e iniciar análise',
+      // job
+      jobName: job ? job.nome_arquivo : '',
+      jobStatusLabel: isJobRunning ? 'Em processamento' : js.l,
+      jobStatusBg: js.bg, jobStatusColor: js.c,
+      jobModeLabel: job ? job.modo : '', jobCreatedAt: job ? this.fmtDate(job.created_at) : '',
+      jobPct, isJobRunning: !!isJobRunning, currentContactName: st.currentContactName,
+      cTotal: contacts.length, cProc: cProcN, cPend: cPendN, cErr: cErrN, cInc: cIncN, cRev: cRevN,
+      canPause: !!isJobRunning && !this._pause,
+      canResume: !!job && !isJobRunning && ['pausado', 'criado', 'em_processamento'].includes(job.status) && cPendN > 0,
+      canCancel: !!job && !['concluido', 'cancelado'].includes(job.status),
+      onPause: this.onPause, onResume: this.onResume, onCancel: this.onCancel, onExport: this.onExport,
+      hasErrors: cErrN > 0 && !isJobRunning, hasInconclusive: cIncN > 0 && !isJobRunning,
+      onReprocessErrors: this.onReprocessErrors, onReprocessInconclusive: this.onReprocessInconclusive,
+      // filtros + tabela
+      fQ: st.fQ, onFQ: this.onFQ, fStatus: st.fStatus, onFStatus: this.onFStatus,
+      fMin: st.fMin, onFMin: this.onFMin, fRev: st.fRev, onFRev: this.onFRev, fSub: st.fSub, onFSub: this.onFSub,
+      statusFilterOptions, scoreFilterOptions,
+      resultRows, noResults: contacts.length > 0 && resultRows.length === 0,
+      resultCountLabel: resultRows.length + ' de ' + contacts.length + ' contatos',
+      // detalhe
+      hasDetail: !!det, det: det || {},
+      detFontes, hasDetFontes: detFontes.length > 0,
+      detEvidencias, hasDetEvidencias: detEvidencias.length > 0,
+      detDuvidas, hasDetDuvidas: detDuvidas.length > 0,
+      detSub: detSub || {}, hasDetSub: !!detSub, detSubHasLink: !!(detSub && detSub.link_publico),
+      detBuscas, hasDetBuscas: detBuscas.length > 0,
+      onCloseDetail: this.onCloseDetail, onMarkReviewed: this.onMarkReviewed, onReprocessOne: this.onReprocessOne,
+      // configurações
+      sAnthropicKey: settings.anthropicKey || '',
+      needsAnthropicKey: !!this.E && !this.E.hasNativeAI(),
+      sProvider: settings.provider, sTavilyKey: settings.tavilyKey, sGoogleKey: settings.googleKey,
+      sGoogleCx: settings.googleCx, sModel: settings.model, sMaxAttempts: String(settings.maxAttempts),
+      providerOptions, providerHint: providerHints[settings.provider] || '',
+      showTavily: settings.provider === 'tavily', showGoogle: settings.provider === 'google',
+      modelOptions, attemptOptions,
+      onSettingChange: this.onSettingChange, onSaveSettings: this.onSaveSettings,
+    };
+  }
+}
+</script>
+</body>
+</html>
