@@ -9,11 +9,54 @@ const DB_NAME = 'radar-contatos-db';
 const DB_VERSION = 1;
 let _db = null;
 
+// ------------------------------------------------------------
+// Backend de armazenamento: Supabase (nuvem) quando configurado,
+// senão IndexedDB (local, por navegador).
+// ------------------------------------------------------------
+let _sb = null; // { url, key }
+export function configureStorage(settings) {
+  const url = String((settings && settings.supabaseUrl) || '').trim().replace(/\/+$/, '');
+  const key = String((settings && settings.supabaseKey) || '').trim();
+  _sb = url && key ? { url, key } : null;
+}
+export function storageMode() { return _sb ? 'supabase' : 'local'; }
+
+const KEY_COL = { jobs: 'id', contacts: 'id', analyses: 'contact_id' };
+
+async function sbFetch(path, opts = {}) {
+  const r = await fetch(_sb.url + '/rest/v1/' + path, {
+    ...opts,
+    headers: {
+      apikey: _sb.key,
+      Authorization: 'Bearer ' + _sb.key,
+      'content-type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+      ...(opts.headers || {}),
+    },
+  });
+  if (!r.ok) {
+    let m = 'HTTP ' + r.status;
+    try { const j = await r.json(); m = j.message || j.hint || m; } catch (e) {}
+    if (r.status === 404) m = 'tabela não encontrada — rode o script supabase-schema.sql no SQL Editor do Supabase. (' + m + ')';
+    if (r.status === 401 || r.status === 403) m = 'chave inválida ou sem permissão (RLS) — confira URL/chave e as policies. (' + m + ')';
+    throw new Error('Supabase: ' + m);
+  }
+  const txt = await r.text();
+  return txt ? JSON.parse(txt) : null;
+}
+function sbRow(name, val) {
+  const kc = KEY_COL[name];
+  const row = { [kc]: val[kc], data: val };
+  if (name !== 'jobs') row.job_id = val.job_id;
+  return row;
+}
+
 export function uid() {
   return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9);
 }
 
 export function openDb() {
+  if (_sb) return Promise.resolve(null); // usando Supabase; IndexedDB não é necessário
   if (_db) return Promise.resolve(_db);
   return new Promise((res, rej) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -44,14 +87,43 @@ function prom(req) {
     req.onerror = () => rej(req.error);
   });
 }
-export async function put(name, val) { return prom((await store(name, 'readwrite')).put(val)); }
-export async function get(name, key) { return prom((await store(name, 'readonly')).get(key)); }
-export async function getAll(name) { return prom((await store(name, 'readonly')).getAll()); }
-export async function del(name, key) { return prom((await store(name, 'readwrite')).delete(key)); }
+export async function put(name, val) {
+  if (_sb) return sbFetch(name, { method: 'POST', body: JSON.stringify([sbRow(name, val)]) });
+  return prom((await store(name, 'readwrite')).put(val));
+}
+export async function get(name, key) {
+  if (_sb) {
+    const rows = await sbFetch(name + '?' + KEY_COL[name] + '=eq.' + encodeURIComponent(key) + '&select=data');
+    return rows && rows[0] ? rows[0].data : undefined;
+  }
+  return prom((await store(name, 'readonly')).get(key));
+}
+export async function getAll(name) {
+  if (_sb) {
+    const rows = await sbFetch(name + '?select=data&limit=5000');
+    return (rows || []).map((r) => r.data);
+  }
+  return prom((await store(name, 'readonly')).getAll());
+}
+export async function del(name, key) {
+  if (_sb) return sbFetch(name + '?' + KEY_COL[name] + '=eq.' + encodeURIComponent(key), { method: 'DELETE' });
+  return prom((await store(name, 'readwrite')).delete(key));
+}
 export async function byIndex(name, index, key) {
+  if (_sb) {
+    const rows = await sbFetch(name + '?' + index + '=eq.' + encodeURIComponent(key) + '&select=data&limit=5000');
+    return (rows || []).map((r) => r.data);
+  }
   return prom((await store(name, 'readonly')).index(index).getAll(key));
 }
 export async function bulkPut(name, vals) {
+  if (_sb) {
+    // envia em lotes para não estourar o tamanho da requisição
+    for (let i = 0; i < vals.length; i += 200) {
+      await sbFetch(name, { method: 'POST', body: JSON.stringify(vals.slice(i, i + 200).map((v) => sbRow(name, v))) });
+    }
+    return;
+  }
   const s = await store(name, 'readwrite');
   for (const v of vals) s.put(v);
   return new Promise((res, rej) => {
@@ -60,12 +132,25 @@ export async function bulkPut(name, vals) {
   });
 }
 export async function deleteJobCascade(jobId) {
+  if (_sb) {
+    await sbFetch('analyses?job_id=eq.' + encodeURIComponent(jobId), { method: 'DELETE' });
+    await sbFetch('contacts?job_id=eq.' + encodeURIComponent(jobId), { method: 'DELETE' });
+    await sbFetch('jobs?id=eq.' + encodeURIComponent(jobId), { method: 'DELETE' });
+    return;
+  }
   const contacts = await byIndex('contacts', 'job_id', jobId);
   for (const c of contacts) {
     await del('analyses', c.id).catch(() => {});
     await del('contacts', c.id);
   }
   await del('jobs', jobId);
+}
+
+// Testa a conexão com o Supabase (usado nas Configurações)
+export async function testSupabase() {
+  if (!_sb) throw new Error('URL e chave do Supabase não configuradas.');
+  await sbFetch('jobs?select=id&limit=1');
+  return true;
 }
 
 // ------------------------------------------------------------

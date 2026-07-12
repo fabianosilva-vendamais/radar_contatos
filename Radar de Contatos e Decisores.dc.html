@@ -484,6 +484,27 @@
           </div>
         </sc-if>
 
+        <div style="border-top:1px solid #E4E2DB;padding-top:16px;">
+          <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Banco de dados — Supabase (opcional)</label>
+          <div style="font-size:12.5px;color:#6E7076;margin-bottom:10px;line-height:1.5;">Sem Supabase, os dados ficam salvos em: <strong>{{dbLabel}}</strong>. Com Supabase, análises ficam na nuvem e acessíveis de qualquer dispositivo. Crie um projeto gratuito em <a href="https://supabase.com" target="_blank" rel="noopener">supabase.com</a>, rode o script <strong>supabase-schema.sql</strong> (incluído no projeto) no SQL Editor e cole abaixo a URL e a chave <em>anon public</em> (Settings → API).</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Project URL</label>
+              <input value="{{sSupabaseUrl}}" data-key="supabaseUrl" onChange="{{onSettingChange}}" placeholder="https://xxxx.supabase.co" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 12px;width:100%;font-family:'IBM Plex Mono',monospace;">
+            </div>
+            <div>
+              <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Chave anon public</label>
+              <input type="password" value="{{sSupabaseKey}}" data-key="supabaseKey" onChange="{{onSettingChange}}" placeholder="eyJhbGciOi…" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 12px;width:100%;font-family:'IBM Plex Mono',monospace;">
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:10px;">
+            <button onClick="{{onTestSupabase}}" style="background:#fff;border:1px solid #D6D4CC;border-radius:8px;padding:8px 14px;font-weight:600;font-size:13px;color:#3D4045;" style-hover="background:#F2F1EC;">Testar conexão</button>
+            <sc-if value="{{hasSbStatus}}" hint-placeholder-val="{{false}}">
+              <div style="font-size:12.5px;color:#3D4045;">{{sbStatus}}</div>
+            </sc-if>
+          </div>
+        </div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
             <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Modelo de IA</label>
@@ -573,7 +594,8 @@ class Component extends DCLogic {
     // filtros
     fQ: '', fStatus: 'todos', fMin: '0', fRev: false, fSub: false,
     detailId: null,
-    settings: { provider: 'openai_search', tavilyKey: '', googleKey: '', googleCx: '', model: 'auto', maxAttempts: 3, anthropicKey: '', aiProvider: 'anthropic', openaiKey: '' },
+    settings: { provider: 'openai_search', tavilyKey: '', googleKey: '', googleCx: '', model: 'auto', maxAttempts: 3, anthropicKey: '', aiProvider: 'anthropic', openaiKey: '', supabaseUrl: '', supabaseKey: '' },
+    sbStatus: '',
   };
 
   ensureReady() {
@@ -642,6 +664,8 @@ class Component extends DCLogic {
 
   async componentDidMount() {
     this.E = await import('./engine.js');
+    // pede armazenamento persistente: evita que o navegador apague o banco local
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
     try {
       const saved = localStorage.getItem('radar-settings-v1');
       if (saved) {
@@ -649,6 +673,7 @@ class Component extends DCLogic {
         // modo simulação foi removido; tavily sem chave migra para busca da OpenAI
         if (s.provider === 'demo' || (s.provider === 'tavily' && !(s.tavilyKey || '').trim())) s.provider = 'openai_search';
         this.setState({ settings: s });
+        this.E.configureStorage(s);
       }
     } catch (e) {}
     await this.E.openDb();
@@ -819,10 +844,35 @@ class Component extends DCLogic {
   onNewAnalysis = () => this.setState({ view: 'new', step: 1, file: null, mapping: {}, mode: 'completo', fileError: '', mapError: '', creating: false });
   onOpenSettings = () => this.setState({ settingsOpen: true });
   onCloseSettings = () => this.setState({ settingsOpen: false });
-  onSaveSettings = () => {
+  onSaveSettings = async () => {
+    if (this.state.runningJobId) { this.toast('Pause a análise antes de mudar as configurações.'); return; }
     localStorage.setItem('radar-settings-v1', JSON.stringify(this.state.settings));
-    this.setState({ settingsOpen: false });
+    const before = this.E ? this.E.storageMode() : 'local';
+    if (this.E) this.E.configureStorage(this.state.settings);
+    const after = this.E ? this.E.storageMode() : 'local';
+    this.setState({ settingsOpen: false, sbStatus: '' });
     this.toast('Configurações salvas.');
+    if (this.E && before !== after) {
+      this.setState({ view: 'home', currentJob: null, detailId: null });
+      await this.reloadJobs();
+      this.toast(after === 'supabase' ? 'Conectado ao Supabase — dados agora na nuvem.' : 'Voltou ao armazenamento local deste navegador.');
+    }
+  };
+
+  onTestSupabase = async () => {
+    if (!this.E) return;
+    this.setState({ sbStatus: 'Testando conexão…' });
+    const prev = { url: this.state.settings.supabaseUrl, key: this.state.settings.supabaseKey };
+    try {
+      this.E.configureStorage({ supabaseUrl: prev.url, supabaseKey: prev.key });
+      await this.E.testSupabase();
+      this.setState({ sbStatus: '✓ Conexão OK — tabelas encontradas.' });
+    } catch (e) {
+      this.setState({ sbStatus: '✕ ' + String((e && e.message) || e) });
+    } finally {
+      // restaura o modo conforme as configurações efetivamente salvas
+      try { this.E.configureStorage(JSON.parse(localStorage.getItem('radar-settings-v1') || '{}')); } catch (err) { this.E.configureStorage({}); }
+    }
   };
   onSettingChange = (e) => {
     const key = e.currentTarget.dataset.key;
@@ -1273,6 +1323,9 @@ class Component extends DCLogic {
       settingsIntro: (!!this.E && !this.E.hasNativeAI())
         ? 'As chaves ficam salvas apenas neste navegador. São necessárias duas: a de busca web (Tavily ou Google) e a da IA (Anthropic ou OpenAI).'
         : 'As chaves ficam salvas apenas neste navegador. A análise por IA já está integrada — nenhuma chave é necessária para ela.',
+      sSupabaseUrl: settings.supabaseUrl || '', sSupabaseKey: settings.supabaseKey || '',
+      sbStatus: st.sbStatus, hasSbStatus: !!st.sbStatus, onTestSupabase: this.onTestSupabase,
+      dbLabel: (!!this.E && this.E.storageMode() === 'supabase') ? 'Supabase (nuvem)' : 'este navegador',
       aiProviderOptions, sAiProvider: settings.aiProvider || 'anthropic',
       sOpenaiKey: settings.openaiKey || '',
       showAnthropicKey: !!this.E && !this.E.hasNativeAI() && settings.aiProvider !== 'openai',

@@ -30,6 +30,7 @@ Não há arquivo `.env`: por ser um app estático, as chaves são inseridas no b
 | Chave da API Anthropic (IA) | `AI_API_KEY` | https://console.anthropic.com — **obrigatória quando hospedado fora do ambiente original** (ex.: Vercel) |
 | Modelo de IA | `AI_MODEL` | automático por modo, Haiku ou Sonnet |
 | Máx. tentativas por contato | `MAX_ATTEMPTS_PER_CONTACT` | seletor em Configurações |
+| Supabase URL + chave anon (opcional) | `SUPABASE_URL` / `SUPABASE_ANON_KEY` | supabase.com — banco na nuvem, acessível de qualquer dispositivo |
 
 O provedor padrão é **Tavily** — crie a chave gratuita e cole em Configurações antes da primeira análise.
 
@@ -37,7 +38,7 @@ O provedor padrão é **Tavily** — crie a chave gratuita e cole em Configuraç
 
 - **Busca web** (`engine.js` → `runSearches`, `searchTavily`, `searchGoogle`): camada genérica de provedores. Para adicionar outro provedor (Bing, SerpAPI via proxy etc.), acrescente uma função que receba a query e retorne `[{titulo, url, trecho}]`.
 - **IA** (`engine.js` → `callAI`, `analyzeContact`, `buildSystemPrompt`): monta o prompt conservador, chama a API e valida/normaliza o JSON retornado no schema obrigatório.
-- **Banco de dados** (`engine.js` → IndexedDB): tabelas `jobs`, `contacts`, `analyses`. Persistente por navegador; progresso salvo após cada contato, com retomada automática se o processamento for interrompido.
+- **Banco de dados** (`engine.js` → `configureStorage`, `put`/`get`/`byIndex`): tabelas `jobs`, `contacts`, `analyses`. Por padrão usa IndexedDB (local, por navegador). Com Supabase configurado em Configurações (URL + chave anon), os dados vão para a nuvem — rode antes o `supabase-schema.sql` no SQL Editor do Supabase. Progresso salvo após cada contato, com retomada automática se o processamento for interrompido.
 - **Exportação Excel** (`engine.js` → `exportExcel`): todas as colunas originais + resultado da análise.
 - **Interface** (`Radar de Contatos e Decisores.dc.html`): upload, mapeamento de colunas, progresso com pausar/continuar, tabela com filtros, detalhe do contato e configurações.
 
@@ -51,5 +52,6 @@ O provedor padrão é **Tavily** — crie a chave gratuita e cole em Configuraç
 ## Limitações conhecidas
 
 - O processamento roda enquanto a aba estiver aberta; se fechar, a análise fica marcada como interrompida e pode ser retomada de onde parou.
-- Os dados ficam no navegador (IndexedDB). Para compartilhar resultados, use a exportação Excel.
+- Sem Supabase, os dados ficam no navegador (IndexedDB) e presos ao domínio/navegador usado. Com Supabase, ficam na nuvem — mas a chave anon dá leitura/escrita a quem a tiver; use um projeto Supabase dedicado.
+- As chaves de API continuam salvas por navegador (localStorage), por segurança.
 - Arquivo de teste incluído: `exemplo-contatos.csv` (6 contatos fictícios).
