@@ -233,62 +233,18 @@ function hashStr(s) {
   return Math.abs(h);
 }
 
-// Modo simulação: gera resultados FICTÍCIOS e claramente marcados,
-// apenas para testar o fluxo completo sem chave de API.
-function searchDemo(q, o) {
-  const h = hashStr(o.nome || '');
-  const scen = h % 4; // 0 confirmado, 1 promovido, 2 saiu, 3 ambíguo
-  const emp = o.empresa || 'Empresa';
-  const nome = o.nome || 'Contato';
-  const cargo = o.cargo || 'Gerente';
-  const base = 'https://demo-simulado.exemplo';
-  const isSubQuery = q.includes('Diretor') || q.includes('Gerente de RH') || q.includes('Head');
-  if (q.includes('CNPJ')) {
-    const d1 = String(10 + (h % 80));
-    return [
-      { titulo: `[SIMULADO] ${emp} — CNPJ e dados cadastrais`, url: base + '/cnpj', trecho: `[SIMULADO] ${emp} Ltda — CNPJ ${d1}.345.678/0001-${String(h % 90).padStart(2, '0')}, situação cadastral ativa.` },
-    ];
-  }
-  if (isSubQuery && scen === 2) {
-    return [
-      { titulo: `[SIMULADO] ${emp} anuncia nova liderança comercial`, url: base + '/noticia-lideranca', trecho: `[SIMULADO] A ${emp} anunciou Marina Duarte como nova ${cargo}, assumindo a área após reestruturação do time.` },
-    ];
-  }
-  if (scen === 0) {
-    return [
-      { titulo: `[SIMULADO] Página de equipe — ${emp}`, url: base + '/equipe', trecho: `[SIMULADO] ${nome} — ${cargo} na ${emp}. Página institucional atualizada em 2026.` },
-      { titulo: `[SIMULADO] ${nome} participa de evento do setor`, url: base + '/evento-2026', trecho: `[SIMULADO] ${nome}, ${cargo} da ${emp}, participou como palestrante em maio de 2026.` },
-    ];
-  }
-  if (scen === 1) {
-    return [
-      { titulo: `[SIMULADO] ${nome} é promovido na ${emp}`, url: base + '/promocao', trecho: `[SIMULADO] ${nome} assume novo cargo de Diretor na ${emp} a partir de janeiro de 2026, após atuar como ${cargo}.` },
-    ];
-  }
-  if (scen === 2) {
-    return [
-      { titulo: `[SIMULADO] ${nome} anuncia novo desafio profissional`, url: base + '/mudanca', trecho: `[SIMULADO] Em publicação pública de março de 2026, ${nome} informou que deixou a ${emp} e ingressou na Nova Horizonte S.A.` },
-    ];
-  }
-  return [
-    { titulo: `[SIMULADO] Resultado genérico sobre "${nome}"`, url: base + '/generico', trecho: `[SIMULADO] Há mais de uma pessoa com o nome ${nome} em registros públicos; nenhuma menção clara à ${emp} foi encontrada.` },
-  ];
-}
-
 export async function runSearches(queries, settings, original) {
   const out = [];
   let lastErr = null, ok = 0;
   for (const q of queries) {
     try {
       let results;
-      if (settings.provider === 'tavily') {
-        if (!settings.tavilyKey) throw new Error('Chave da API Tavily não configurada (abra Configurações).');
-        results = await searchTavily(q, settings);
-      } else if (settings.provider === 'google') {
+      if (settings.provider === 'google') {
         if (!settings.googleKey || !settings.googleCx) throw new Error('Chave/CX do Google não configurados (abra Configurações).');
         results = await searchGoogle(q, settings);
       } else {
-        results = searchDemo(q, original);
+        if (!settings.tavilyKey) throw new Error('Chave da API Tavily não configurada (abra Configurações).');
+        results = await searchTavily(q, settings);
       }
       ok++;
       out.push({ busca: q, resultados: results });
@@ -362,7 +318,6 @@ REGRAS OBRIGATÓRIAS:
 7. substituto_sugerido: apenas com fonte pública que ligue a pessoa à empresa; caso contrário retorne null. Nunca invente substituto.
 7b. cnpj_empresa: informe o CNPJ da empresa original SOMENTE se constar nos dados oficiais fornecidos ou em alguma fonte de busca (formato 00.000.000/0000-00). Nunca invente ou complete dígitos; sem evidência, retorne "". Quando houver DADOS OFICIAIS DO CNPJ, use a razão social e o nome fantasia deles como âncora para o discernimento de nome de empresa.
 8. Não use nem sugira scraping de LinkedIn; trate URLs de LinkedIn apenas como referência pública.
-9. Fontes marcadas [SIMULADO] são dados fictícios de teste: analise-os normalmente, mas mencione em pontos_de_duvida que são simulados.
 ${detail}
 
 Responda APENAS com JSON válido (sem markdown, sem texto fora do JSON) exatamente neste schema:
@@ -400,7 +355,10 @@ function normalizeAnalysis(j) {
   a.continua_na_empresa = typeof j.continua_na_empresa === 'boolean' ? j.continua_na_empresa : null;
   a.empresa_atual_provavel = String(j.empresa_atual_provavel || '');
   a.cnpj_empresa = String(j.cnpj_empresa || '');
+  // o modelo às vezes vaza tokens do enum nesses campos de texto livre
+  if (/^[a-z_]+$/.test(a.empresa_atual_provavel) && a.empresa_atual_provavel.includes('_')) a.empresa_atual_provavel = '';
   a.cargo_atual_provavel = String(j.cargo_atual_provavel || '');
+  if (/^[a-z_]+$/.test(a.cargo_atual_provavel) && a.cargo_atual_provavel.includes('_')) a.cargo_atual_provavel = '';
   a.equivalencia_cargo = EQUIVALENCIA.includes(j.equivalencia_cargo) ? j.equivalencia_cargo : 'inconclusivo';
   a.score_confianca = Math.max(0, Math.min(100, Number(j.score_confianca) || 0));
   a.risco_homonimo = !!j.risco_homonimo;
@@ -506,9 +464,6 @@ export async function analyzeContact(contact, job, settings) {
     const queries = buildQueries(o, mode);
     buscas = await runSearches(queries, settings, o);
     searchBlock = 'RESULTADOS DE BUSCA WEB (fontes públicas):\n' + JSON.stringify(buscas, null, 1);
-    if (settings.provider === 'demo') {
-      searchBlock = '[MODO SIMULAÇÃO ATIVO — os resultados abaixo são FICTÍCIOS, gerados para teste do fluxo]\n' + searchBlock;
-    }
   }
   const model = resolveModel(mode, settings);
   // dados oficiais do CNPJ, quando a planilha tiver a coluna mapeada

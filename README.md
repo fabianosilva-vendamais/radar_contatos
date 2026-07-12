@@ -24,18 +24,18 @@ Não há arquivo `.env`: por ser um app estático, as chaves são inseridas no b
 
 | Configuração | Equivalente | Onde obter |
 |---|---|---|
-| Provedor de busca web | `WEB_SEARCH_PROVIDER` | Simulação / Tavily / Google CSE / somente IA |
+| Provedor de busca web | `WEB_SEARCH_PROVIDER` | Tavily / Google CSE / somente IA |
 | Chave Tavily | `WEB_SEARCH_API_KEY` | https://tavily.com (recomendado — funciona direto do navegador) |
 | Google API Key + cx | `WEB_SEARCH_API_KEY` | https://programmablesearchengine.google.com |
 | Chave da API Anthropic (IA) | `AI_API_KEY` | https://console.anthropic.com — **obrigatória quando hospedado fora do ambiente original** (ex.: Vercel) |
 | Modelo de IA | `AI_MODEL` | automático por modo, Haiku ou Sonnet |
 | Máx. tentativas por contato | `MAX_ATTEMPTS_PER_CONTACT` | seletor em Configurações |
 
-O provedor padrão é **Simulação**: gera resultados de busca fictícios marcados `[SIMULADO]` para testar o fluxo completo sem custo. Troque por Tavily ou Google antes de uso real.
+O provedor padrão é **Tavily** — crie a chave gratuita e cole em Configurações antes da primeira análise.
 
 ## Onde cada integração está no código
 
-- **Busca web** (`engine.js` → `runSearches`, `searchTavily`, `searchGoogle`, `searchDemo`): camada genérica de provedores. Para adicionar outro provedor (Bing, SerpAPI via proxy etc.), acrescente uma função que receba a query e retorne `[{titulo, url, trecho}]`.
+- **Busca web** (`engine.js` → `runSearches`, `searchTavily`, `searchGoogle`): camada genérica de provedores. Para adicionar outro provedor (Bing, SerpAPI via proxy etc.), acrescente uma função que receba a query e retorne `[{titulo, url, trecho}]`.
 - **IA** (`engine.js` → `callAI`, `analyzeContact`, `buildSystemPrompt`): monta o prompt conservador, chama a API e valida/normaliza o JSON retornado no schema obrigatório.
 - **Banco de dados** (`engine.js` → IndexedDB): tabelas `jobs`, `contacts`, `analyses`. Persistente por navegador; progresso salvo após cada contato, com retomada automática se o processamento for interrompido.
 - **Exportação Excel** (`engine.js` → `exportExcel`): todas as colunas originais + resultado da análise.
