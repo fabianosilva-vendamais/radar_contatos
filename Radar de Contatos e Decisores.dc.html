@@ -573,7 +573,7 @@ class Component extends DCLogic {
     // filtros
     fQ: '', fStatus: 'todos', fMin: '0', fRev: false, fSub: false,
     detailId: null,
-    settings: { provider: 'tavily', tavilyKey: '', googleKey: '', googleCx: '', model: 'auto', maxAttempts: 3, anthropicKey: '', aiProvider: 'anthropic', openaiKey: '' },
+    settings: { provider: 'openai_search', tavilyKey: '', googleKey: '', googleCx: '', model: 'auto', maxAttempts: 3, anthropicKey: '', aiProvider: 'anthropic', openaiKey: '' },
   };
 
   ensureReady() {
@@ -619,7 +619,7 @@ class Component extends DCLogic {
       outra_area: 'Outra área', cargo_nao_identificado: 'Cargo não identificado',
       mudou_de_empresa: 'Mudou de empresa', inconclusivo: 'Inconclusivo',
     },
-    provider: { tavily: 'Tavily', google: 'Google CSE', none: 'somente IA' },
+    provider: { openai_search: 'OpenAI Search', tavily: 'Tavily', google: 'Google CSE', none: 'somente IA' },
   };
 
   FIELDS = [
@@ -646,7 +646,8 @@ class Component extends DCLogic {
       const saved = localStorage.getItem('radar-settings-v1');
       if (saved) {
         const s = { ...this.state.settings, ...JSON.parse(saved) };
-        if (s.provider === 'demo') s.provider = 'tavily'; // modo simulação foi removido
+        // modo simulação foi removido; tavily sem chave migra para busca da OpenAI
+        if (s.provider === 'demo' || (s.provider === 'tavily' && !(s.tavilyKey || '').trim())) s.provider = 'openai_search';
         this.setState({ settings: s });
       }
     } catch (e) {}
@@ -719,9 +720,10 @@ class Component extends DCLogic {
     {
       const s = this.state.settings;
       const searchKeyMissing = s.provider === 'google' ? !(s.googleKey || '').trim() || !(s.googleCx || '').trim()
-        : s.provider === 'tavily' ? !(s.tavilyKey || '').trim() : false;
+        : s.provider === 'tavily' ? !(s.tavilyKey || '').trim()
+        : s.provider === 'openai_search' ? !(s.openaiKey || '').trim() : false;
       if (searchKeyMissing) {
-        this.toast('Configure a chave do provedor de busca (' + (s.provider === 'google' ? 'Google' : 'Tavily') + ') em Configurações antes de processar.');
+        this.toast('Configure a chave do provedor de busca (' + (s.provider === 'google' ? 'Google' : s.provider === 'tavily' ? 'Tavily' : 'OpenAI') + ') em Configurações antes de processar.');
         this.setState({ settingsOpen: true });
         return;
       }
@@ -1167,11 +1169,13 @@ class Component extends DCLogic {
     }
 
     const providerOptions = [
-      { v: 'tavily', l: 'Tavily (recomendado)' },
+      { v: 'openai_search', l: 'OpenAI Web Search — usa a chave da OpenAI (recomendado)' },
+      { v: 'tavily', l: 'Tavily' },
       { v: 'google', l: 'Google Custom Search' },
       { v: 'none', l: 'Sem busca — somente IA (conservador)' },
     ];
     const providerHints = {
+      openai_search: 'A própria IA da OpenAI pesquisa na web durante a análise. Não precisa de chave de busca separada — apenas a chave da OpenAI abaixo.',
       tavily: 'API de busca feita para IA, funciona direto do navegador. Plano gratuito disponível.',
       google: 'Usa a API oficial Google Programmable Search (100 buscas/dia grátis).',
       none: 'Nenhuma busca é feita; a IA analisa apenas os dados originais e tende a marcar quase tudo como inconclusivo.',
@@ -1260,7 +1264,7 @@ class Component extends DCLogic {
       aiProviderOptions, sAiProvider: settings.aiProvider || 'anthropic',
       sOpenaiKey: settings.openaiKey || '',
       showAnthropicKey: !!this.E && !this.E.hasNativeAI() && settings.aiProvider !== 'openai',
-      showOpenaiKey: !!this.E && !this.E.hasNativeAI() && settings.aiProvider === 'openai',
+      showOpenaiKey: (!!this.E && !this.E.hasNativeAI() && settings.aiProvider === 'openai') || settings.provider === 'openai_search',
       sProvider: settings.provider, sTavilyKey: settings.tavilyKey, sGoogleKey: settings.googleKey,
       sGoogleCx: settings.googleCx, sModel: settings.model, sMaxAttempts: String(settings.maxAttempts),
       providerOptions, providerHint: providerHints[settings.provider] || '',

@@ -428,8 +428,7 @@ async function callOpenAI(body, settings) {
 
 async function callAI(body, settings) {
   if (hasNativeAI()) return window.claude.complete(body);
-  if ((settings.aiProvider || 'anthropic') === 'openai') return callOpenAI(body, settings);
-  const key = String((settings && settings.anthropicKey) || '').trim();
+  if ((settings.aiProvider || 'anthropic') === 'openai') return callOpenAI(body, settings);  const key = String((settings && settings.anthropicKey) || '').trim();
   if (!key) throw new Error('Configure a chave da API Anthropic em Configurações (necessária fora deste ambiente).');
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -453,19 +452,61 @@ async function callAI(body, settings) {
   return text;
 }
 
+// Busca web integrada da OpenAI (Responses API): a IA pesquisa sozinha e
+// responde com o JSON — não precisa de provedor de busca separado.
+async function callOpenAIWebSearch(system, user, model, settings) {
+  const key = String((settings && settings.openaiKey) || '').trim();
+  if (!key) throw new Error('Configure a chave da API OpenAI em Configurações.');
+  const doCall = (toolType) => fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + key, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      tools: [{ type: toolType }],
+      input: [{ role: 'system', content: system }, { role: 'user', content: user }],
+    }),
+  });
+  let r = await doCall('web_search');
+  if (!r.ok && r.status === 400) r = await doCall('web_search_preview');
+  if (!r.ok) {
+    let msg = 'HTTP ' + r.status;
+    try { const j = await r.json(); msg = (j.error && j.error.message) || msg; } catch (e) {}
+    if (r.status === 429) msg = 'limite de requisições/créditos excedido — ' + msg;
+    throw new Error('API OpenAI: ' + msg);
+  }
+  const j = await r.json();
+  let text = j.output_text || '';
+  if (!text && Array.isArray(j.output)) {
+    for (const it of j.output) {
+      if (it.type === 'message' && Array.isArray(it.content)) {
+        for (const c of it.content) if (c.type === 'output_text') text += c.text;
+      }
+    }
+  }
+  if (!text) throw new Error('API OpenAI: resposta vazia.');
+  return text;
+}
+
 export async function analyzeContact(contact, job, settings) {
   const mode = job.modo || 'completo';
   const o = contact.original || {};
+  const usesOpenAISearch = settings.provider === 'openai_search';
   let searchBlock = '';
   let buscas = [];
-  if (settings.provider === 'none') {
+  if (usesOpenAISearch) {
+    const queries = buildQueries(o, mode);
+    buscas = queries.map((q) => ({ busca: q }));
+    searchBlock = 'VOCÊ TEM ACESSO À FERRAMENTA DE BUSCA WEB. Pesquise a pessoa e a empresa em fontes públicas ANTES de concluir. Buscas sugeridas:\n' + queries.map((q) => '- ' + q).join('\n') + '\nBaseie a análise APENAS no que encontrar de fato; preencha o campo fontes com título e URL reais das páginas usadas. Se não encontrar nada relevante, marque inconclusivo.';
+  } else if (settings.provider === 'none') {
     searchBlock = 'NENHUM RESULTADO DE BUSCA WEB DISPONÍVEL (provedor de busca não configurado). Baseie-se apenas nos dados originais e seja extremamente conservador: prefira "inconclusivo" e recomende validação manual, por telefone ou por e-mail.';
   } else {
     const queries = buildQueries(o, mode);
     buscas = await runSearches(queries, settings, o);
     searchBlock = 'RESULTADOS DE BUSCA WEB (fontes públicas):\n' + JSON.stringify(buscas, null, 1);
   }
-  const model = resolveModel(mode, settings);
+  const model = usesOpenAISearch
+    ? ((settings.model === 'gpt-4o' || settings.model === 'gpt-4o-mini') ? settings.model : (mode === 'rapido' ? 'gpt-4o-mini' : 'gpt-4o'))
+    : resolveModel(mode, settings);
   // dados oficiais do CNPJ, quando a planilha tiver a coluna mapeada
   let cnpjBlock = '';
   const oficial = await lookupCnpj(o.cnpj);
@@ -481,12 +522,14 @@ DATA ATUAL: ${new Date().toISOString().slice(0, 10)}
 ${searchBlock}
 
 Analise e responda apenas com o JSON no schema definido.`;
-  const raw = await callAI({
-    model,
-    max_tokens: 4000,
-    system: buildSystemPrompt(mode),
-    messages: [{ role: 'user', content: user }],
-  }, settings);
+  const raw = usesOpenAISearch
+    ? await callOpenAIWebSearch(buildSystemPrompt(mode), user, model, settings)
+    : await callAI({
+        model,
+        max_tokens: 4000,
+        system: buildSystemPrompt(mode),
+        messages: [{ role: 'user', content: user }],
+      }, settings);
   const analysis = normalizeAnalysis(extractJson(raw));
   return { analysis, buscas, raw };
 }
