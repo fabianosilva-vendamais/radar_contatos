@@ -429,8 +429,48 @@ function normalizeAnalysis(j) {
 export function hasNativeAI() {
   return !!(window.claude && window.claude.complete);
 }
+
+// Resolve o modelo conforme o provedor de IA em uso
+export function resolveModel(mode, settings) {
+  const pref = settings.model || 'auto';
+  if (hasNativeAI()) return pref === 'auto' ? (mode === 'rapido' ? 'claude-haiku-4-5' : 'claude-sonnet-4-5') : pref;
+  if ((settings.aiProvider || 'anthropic') === 'openai') {
+    if (pref === 'gpt-4o-mini' || pref === 'gpt-4o') return pref;
+    return mode === 'rapido' ? 'gpt-4o-mini' : 'gpt-4o';
+  }
+  if (pref !== 'auto' && pref.indexOf('claude') === 0) return pref;
+  return mode === 'rapido' ? 'claude-haiku-4-5' : 'claude-sonnet-4-5';
+}
+
+async function callOpenAI(body, settings) {
+  const key = String((settings && settings.openaiKey) || '').trim();
+  if (!key) throw new Error('Configure a chave da API OpenAI em Configurações.');
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + key, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: body.model,
+      max_tokens: body.max_tokens,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'system', content: body.system }].concat(body.messages),
+    }),
+  });
+  if (!r.ok) {
+    let msg = 'HTTP ' + r.status;
+    try { const j = await r.json(); msg = (j.error && j.error.message) || msg; } catch (e) {}
+    if (r.status === 429) msg = 'limite de requisições/créditos excedido — ' + msg;
+    throw new Error('API OpenAI: ' + msg);
+  }
+  const j = await r.json();
+  const text = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+  if (!text) throw new Error('API OpenAI: resposta vazia.');
+  return text;
+}
+
 async function callAI(body, settings) {
   if (hasNativeAI()) return window.claude.complete(body);
+  if ((settings.aiProvider || 'anthropic') === 'openai') return callOpenAI(body, settings);
   const key = String((settings && settings.anthropicKey) || '').trim();
   if (!key) throw new Error('Configure a chave da API Anthropic em Configurações (necessária fora deste ambiente).');
   const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -470,9 +510,7 @@ export async function analyzeContact(contact, job, settings) {
       searchBlock = '[MODO SIMULAÇÃO ATIVO — os resultados abaixo são FICTÍCIOS, gerados para teste do fluxo]\n' + searchBlock;
     }
   }
-  const model = settings.model === 'auto'
-    ? (mode === 'rapido' ? 'claude-haiku-4-5' : 'claude-sonnet-4-5')
-    : settings.model;
+  const model = resolveModel(mode, settings);
   // dados oficiais do CNPJ, quando a planilha tiver a coluna mapeada
   let cnpjBlock = '';
   const oficial = await lookupCnpj(o.cnpj);

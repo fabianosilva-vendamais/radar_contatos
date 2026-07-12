@@ -444,7 +444,7 @@
     <div style="position:fixed;inset:0;background:rgba(27,30,34,0.35);z-index:50;" onClick="{{onCloseSettings}}"></div>
     <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(620px,94vw);max-height:88vh;overflow-y:auto;background:#fff;border-radius:16px;z-index:51;box-shadow:0 20px 60px rgba(0,0,0,0.25);padding:28px 30px;">
       <h2 style="margin:0 0 4px;font-size:20px;font-weight:700;">Configurações</h2>
-      <p style="margin:0 0 20px;font-size:13.5px;color:#6E7076;line-height:1.5;">As chaves ficam salvas apenas neste navegador. A análise por IA já está integrada — nenhuma chave é necessária para ela.</p>
+      <p style="margin:0 0 20px;font-size:13.5px;color:#6E7076;line-height:1.5;">{{settingsIntro}}</p>
 
       <div style="display:flex;flex-direction:column;gap:16px;">
         <div>
@@ -494,9 +494,27 @@
 
         <sc-if value="{{needsAnthropicKey}}" hint-placeholder-val="{{false}}">
           <div>
-            <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Chave da API Anthropic (IA)</label>
+            <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Provedor de IA</label>
+            <select value="{{sAiProvider}}" data-key="aiProvider" onChange="{{onSettingChange}}" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 10px;background:#fff;width:100%;">
+              <sc-for list="{{aiProviderOptions}}" as="o" hint-placeholder-count="2"><option value="{{o.v}}">{{o.l}}</option></sc-for>
+            </select>
+            <div style="font-size:12.5px;color:#6E7076;margin-top:6px;line-height:1.5;">O sistema está rodando fora do ambiente com IA integrada (ex.: Vercel), então precisa de uma chave própria. Fica salva apenas neste navegador.</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{showAnthropicKey}}" hint-placeholder-val="{{false}}">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Chave da API Anthropic</label>
             <input type="password" value="{{sAnthropicKey}}" data-key="anthropicKey" onChange="{{onSettingChange}}" placeholder="sk-ant-…" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 12px;width:100%;font-family:'IBM Plex Mono',monospace;">
-            <div style="font-size:12.5px;color:#6E7076;margin-top:6px;line-height:1.5;">O sistema está rodando fora do ambiente com IA integrada (ex.: Vercel), então precisa de uma chave própria. Crie em <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>. Fica salva apenas neste navegador.</div>
+            <div style="font-size:12.5px;color:#6E7076;margin-top:6px;">Crie em <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> (requer billing ativo).</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{showOpenaiKey}}" hint-placeholder-val="{{false}}">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:#3D4045;display:block;margin-bottom:5px;">Chave da API OpenAI</label>
+            <input type="password" value="{{sOpenaiKey}}" data-key="openaiKey" onChange="{{onSettingChange}}" placeholder="sk-…" style="border:1px solid #D6D4CC;border-radius:8px;padding:9px 12px;width:100%;font-family:'IBM Plex Mono',monospace;">
+            <div style="font-size:12.5px;color:#6E7076;margin-top:6px;">Crie em <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a> (requer créditos de API).</div>
           </div>
         </sc-if>
 
@@ -548,7 +566,7 @@ class Component extends DCLogic {
     // filtros
     fQ: '', fStatus: 'todos', fMin: '0', fRev: false, fSub: false,
     detailId: null,
-    settings: { provider: 'demo', tavilyKey: '', googleKey: '', googleCx: '', model: 'auto', maxAttempts: 3, anthropicKey: '' },
+    settings: { provider: 'demo', tavilyKey: '', googleKey: '', googleCx: '', model: 'auto', maxAttempts: 3, anthropicKey: '', aiProvider: 'anthropic', openaiKey: '' },
   };
 
   ensureReady() {
@@ -678,10 +696,14 @@ class Component extends DCLogic {
   async runJob(jobId) {
     if (!this.ensureReady()) return;
     if (this.state.runningJobId) { this.toast('Já existe uma análise em processamento. Pause-a antes de iniciar outra.'); return; }
-    if (!this.E.hasNativeAI() && !String(this.state.settings.anthropicKey || '').trim()) {
-      this.toast('Para processar aqui, configure a chave da API Anthropic em Configurações.');
-      this.setState({ settingsOpen: true });
-      return;
+    if (!this.E.hasNativeAI()) {
+      const s = this.state.settings;
+      const key = (s.aiProvider === 'openai' ? s.openaiKey : s.anthropicKey) || '';
+      if (!key.trim()) {
+        this.toast('Para processar aqui, configure a chave da API de IA (' + (s.aiProvider === 'openai' ? 'OpenAI' : 'Anthropic') + ') em Configurações.');
+        this.setState({ settingsOpen: true });
+        return;
+      }
     }
     this._pause = false;
     let job = await this.E.get('jobs', jobId);
@@ -769,7 +791,9 @@ class Component extends DCLogic {
   onSettingChange = (e) => {
     const key = e.currentTarget.dataset.key;
     const value = e.currentTarget.value;
-    this.setState({ settings: { ...this.state.settings, [key]: value } });
+    const patch = { [key]: value };
+    if (key === 'aiProvider') patch.model = 'auto'; // evita modelo de um provedor com outro
+    this.setState({ settings: { ...this.state.settings, ...patch } });
   };
 
   exportJobFromHome = async (jobId) => {
@@ -1128,10 +1152,21 @@ class Component extends DCLogic {
       google: 'Usa a API oficial Google Programmable Search (100 buscas/dia grátis).',
       none: 'Nenhuma busca é feita; a IA analisa apenas os dados originais e tende a marcar quase tudo como inconclusivo.',
     };
-    const modelOptions = [
-      { v: 'auto', l: 'Automático por modo (recomendado)' },
-      { v: 'claude-haiku-4-5', l: 'Claude Haiku — mais rápido' },
-      { v: 'claude-sonnet-4-5', l: 'Claude Sonnet — mais preciso' },
+    const usingOpenAI = !!this.E && !this.E.hasNativeAI() && settings.aiProvider === 'openai';
+    const modelOptions = usingOpenAI
+      ? [
+          { v: 'auto', l: 'Automático por modo (recomendado)' },
+          { v: 'gpt-4o-mini', l: 'GPT-4o mini — mais rápido' },
+          { v: 'gpt-4o', l: 'GPT-4o — mais preciso' },
+        ]
+      : [
+          { v: 'auto', l: 'Automático por modo (recomendado)' },
+          { v: 'claude-haiku-4-5', l: 'Claude Haiku — mais rápido' },
+          { v: 'claude-sonnet-4-5', l: 'Claude Sonnet — mais preciso' },
+        ];
+    const aiProviderOptions = [
+      { v: 'anthropic', l: 'Anthropic (Claude)' },
+      { v: 'openai', l: 'OpenAI (GPT)' },
     ];
     const attemptOptions = [{ v: '1', l: '1' }, { v: '2', l: '2' }, { v: '3', l: '3' }, { v: '5', l: '5' }];
 
@@ -1193,6 +1228,13 @@ class Component extends DCLogic {
       // configurações
       sAnthropicKey: settings.anthropicKey || '',
       needsAnthropicKey: !!this.E && !this.E.hasNativeAI(),
+      settingsIntro: (!!this.E && !this.E.hasNativeAI())
+        ? 'As chaves ficam salvas apenas neste navegador. São necessárias duas: a de busca web (Tavily ou Google) e a da IA (Anthropic ou OpenAI).'
+        : 'As chaves ficam salvas apenas neste navegador. A análise por IA já está integrada — nenhuma chave é necessária para ela.',
+      aiProviderOptions, sAiProvider: settings.aiProvider || 'anthropic',
+      sOpenaiKey: settings.openaiKey || '',
+      showAnthropicKey: !!this.E && !this.E.hasNativeAI() && settings.aiProvider !== 'openai',
+      showOpenaiKey: !!this.E && !this.E.hasNativeAI() && settings.aiProvider === 'openai',
       sProvider: settings.provider, sTavilyKey: settings.tavilyKey, sGoogleKey: settings.googleKey,
       sGoogleCx: settings.googleCx, sModel: settings.model, sMaxAttempts: String(settings.maxAttempts),
       providerOptions, providerHint: providerHints[settings.provider] || '',
