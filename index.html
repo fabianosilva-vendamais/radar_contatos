@@ -2,26 +2,10 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Radar de Contatos e Decisores — benchmark econômico</title>
-<script>
-(function () {
-  try {
-    const key = 'radar-settings-v1';
-    const saved = JSON.parse(localStorage.getItem(key) || '{}');
-    // Benchmark econômico: preserva chaves e provedor escolhidos pelo usuário,
-    // mas evita que o modo completo caia no GPT-4o por padrão.
-    if (!saved.model || saved.model === 'auto' || saved.model === 'gpt-4o') saved.model = 'gpt-4o-mini';
-    if (!saved.maxAttempts || Number(saved.maxAttempts) > 2) saved.maxAttempts = 2;
-    // Se Tavily já estiver configurado, ele evita usar web_search da OpenAI em todos os contatos.
-    // Nunca troca o provedor se a chave não existir.
-    if ((saved.tavilyKey || '').trim()) saved.provider = 'tavily';
-    localStorage.setItem(key, JSON.stringify(saved));
-  } catch (e) {}
-  location.replace('Radar%20de%20Contatos%20e%20Decisores.dc.html');
-})();
-</script>
+<meta http-equiv="refresh" content="0; url=Radar%20de%20Contatos%20e%20Decisores.dc.html">
+<title>Radar de Contatos e Decisores</title>
 </head>
 <body style="font-family:sans-serif;padding:40px;">
-Carregando o Radar em modo econômico…
+<a href="Radar%20de%20Contatos%20e%20Decisores.dc.html">Abrir o Radar de Contatos e Decisores</a>
 </body>
 </html>
